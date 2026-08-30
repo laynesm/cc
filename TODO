@@ -1,0 +1,22 @@
+===================================================================================
+		               TODOIST DO PROJETO 
+===================================================================================
+
+- Ser capaz de identificar tipagem de literais e overflow/underflow básico.
+	E.g: -10 ser assinado e não atribuível a uma variável não-assinada,
+	ou 384 não ser atributível a um char, 1285679 não ser atribuível a um short.
+	Checagem além desse básico que nós temos.
+
+- Respeitar aritmética de pointeiros (char * + 1 = + 1, int * + 1 = + (1 * 4))
+
+- Respeitar tamanho das variáveis em diferentes tipos, reduzindo o tamanho para char, short, int, e assim por diante.
+
+- Começar a pensar em overflow-safety (só trocar o strtol por algo mais seguro que lida com overflow de long e auto-unsigned caso necessário (ul))
+
+- Implementar goto e labels (parece simples)
+- Fazer o for (agora é realmente simples)
+- Implementar o switch 
+
+===================================================================================
+		               TODOIST DO PROJETO 
+===================================================================================
