@@ -141,8 +141,15 @@ struct sym *symadd(char *name, int scope, int size, int sign, int isptr)
 	strncpy(s->sym_name, name, sizeof(s->sym_name) - 1);
 	s->sym_name[sizeof(s->sym_name) - 1] = '\0';
 
-	symtab.tab_stackoff -= 8;
+	/*
+	 * a pointer should be sized on eight bytes always.
+	 * and the adresses should be aligned
+	 */
+	symtab.tab_stackoff -= isptr ? 8 : size;
 	s->sym_off = symtab.tab_stackoff;
+
+	if (isptr || size > 1) symtab.tab_stackoff &= ~((isptr ? 8 : size) - 1);
+
 	s->sym_scope = scope;
 	s->sym_ty.sty_size = size;
 	s->sym_ty.sty_signed = sign;

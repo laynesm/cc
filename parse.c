@@ -166,6 +166,7 @@ void expr(int min_prec)
 			if (l.lval_kind == REGIS) emit_regis_postamble();
 			
 			tyassign(&l.lval_ty, lval.lval_ty);
+			
 			op->op_emit(l);
 
 			lval.lval_kind = NONE;
@@ -186,6 +187,24 @@ void expr(int min_prec)
 			printf("	pop %%rcx\n");
 
 			printf("	xchg %%rax, %%rcx\n");
+
+			if (op->op_emit == emit_add || op->op_emit == emit_sub) {
+				int islhsptr = lhs_ty.sty_isptr;
+				int isrhsptr = lval.lval_ty.sty_isptr;
+
+				if (islhsptr && !isrhsptr) {
+					int sz = (lhs_ty.sty_isptr > 1) ? 8 : lhs_ty.sty_size;
+					if (sz > 1) printf("	imul $%d, %%rcx\n", sz);
+				} else {
+					int sz = (lval.lval_ty.sty_isptr > 1) ? 8 : lhs_ty.sty_size;
+					if (sz > 1) printf("	imul $%d, %%rax\n", sz);
+				}
+			}
+
+			if (op->op_emit == emit_mul || op->op_emit == emit_div || op->op_emit == emit_rem) {
+				if (lhs_ty.sty_isptr > 0 || lval.lval_ty.sty_isptr > 0)
+					error("invalid pointer operation");
+			}
 
 			lval.lval_ty = lhs_ty;
 			op->op_emit(lval);

@@ -1,8 +1,48 @@
 #include <stdio.h>
 
-#include "parse.h"
 #include "emit.h"
+#include "parse.h"
 #include "util.h"
+
+static void emit_load(int off, const char *from, int size, int sign)
+{
+	switch (size) {
+	case 1:
+		printf("mov%cbq %d(%s), %%rax\n", sign ? 's' : 'z', off, from);
+		break;
+	case 2:
+		printf("mov%cwq %d(%s), %%rax\n", sign ? 's' : 'z', off, from);
+		break;
+	case 4:
+		printf("	%s %d(%s), %%rax\n", sign ? "movslq" : "movl", off, from);
+		break;
+	case 8:
+		printf("	mov %d(%s), %%rax\n", off, from);
+		break;
+	default:
+		error("not yet implemented - emit_load");
+	}
+}
+
+static void emit_store(int off, const char *to, int size)
+{
+	switch (size) {
+	case 1:
+		printf("	movb %%al, %d(%s)\n", off, to);
+		break;
+	case 2:
+		printf("	movw %%ax, %d(%s)\n", off, to);
+		break;
+	case 4:
+		printf("	movl %%eax, %d(%s)\n", off, to);
+		break;
+	case 8:
+		printf("	movq %%rax, %d(%s)\n", off, to);
+		break;
+	default:
+		error("not implemented yet - emit_store");
+	}
+}
 
 void emit_regis_preamble(void)
 {
@@ -14,9 +54,9 @@ void emit_regis_postamble(void)
 	printf("	pop %%rcx\n");
 }
 
-void emit_deptr(struct lval)
+void emit_deptr(struct lval l)
 {
-	printf("	mov (%%rax), %%rax\n");
+	emit_load(0, "%rax", l.lval_ty.sty_size, l.lval_ty.sty_signed);
 }
 
 void emit_ptr(struct lval l)
@@ -69,22 +109,27 @@ void emit_epilogue(void)
 
 void emit_load_var(struct lval l)
 {
+	int size = l.lval_ty.sty_isptr ? 8 : l.lval_ty.sty_size;
+	int sign = l.lval_ty.sty_signed;
+
 	if (l.lval_kind == REGIS) {
-		printf("	mov (%%rax),%%rax\n");
+		emit_load(0, "%rax", size, sign);
 		return;
 	}
 
-	printf("	mov %d(%%rbp), %%rax\n", l.lval_off);
+	emit_load(l.lval_off, "%rbp", size, sign);
 }
 
 void emit_store_var(struct lval l)
 {
-	if (l.lval_kind == REGIS) {
-		printf("	mov %%rax, (%%rcx)\n");
-		return;
-	}
+	    int size = l.lval_ty.sty_isptr ? 8 : l.lval_ty.sty_size;
 
-	printf("	mov %%rax, %d(%%rbp)\n", l.lval_off);
+	        if (l.lval_kind == REGIS) {
+			        emit_store(0, "%rcx", size);
+				        return;
+					    }
+
+	    emit_store(l.lval_off, "%rbp", size);
 }
 
 void emit_label(const char *s)
