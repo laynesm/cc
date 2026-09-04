@@ -154,6 +154,8 @@ void expr(int min_prec)
 
 	for (;;) {
 		const struct operator *op = opundercurs();
+		struct symty lhs_ty;
+
 		if (!op || op->op_precedence < min_prec) break;
 		advcurs(op->op_slen);
 		
@@ -177,38 +179,36 @@ void expr(int min_prec)
 		/*
 		 * If it is left-associated, overwrite the l-value.
 		 */
-		{
-			struct symty lhs_ty = lval.lval_ty;
-			lval.lval_kind = lval.lval_off = NONE;
+		lhs_ty = lval.lval_ty;
+		lval.lval_kind = lval.lval_off = NONE;
 
-			printf("	push %%rax\n");
-			expr_ty = lhs_ty;
-			expr(op->op_precedence + 1);
-			printf("	pop %%rcx\n");
+		printf("	push %%rax\n");
+		expr_ty = lhs_ty;
+		expr(op->op_precedence + 1);
+		printf("	pop %%rcx\n");
 
-			printf("	xchg %%rax, %%rcx\n");
+		printf("	xchg %%rax, %%rcx\n");
 
-			if (op->op_emit == emit_add || op->op_emit == emit_sub) {
-				int islhsptr = lhs_ty.sty_isptr;
-				int isrhsptr = lval.lval_ty.sty_isptr;
+		if (op->op_emit == emit_add || op->op_emit == emit_sub) {
+			int islhsptr = lhs_ty.sty_isptr;
+			int isrhsptr = lval.lval_ty.sty_isptr;
 
-				if (islhsptr && !isrhsptr) {
-					int sz = (lhs_ty.sty_isptr > 1) ? 8 : lhs_ty.sty_size;
-					if (sz > 1) printf("	imul $%d, %%rcx\n", sz);
-				} else {
-					int sz = (lval.lval_ty.sty_isptr > 1) ? 8 : lhs_ty.sty_size;
-					if (sz > 1) printf("	imul $%d, %%rax\n", sz);
-				}
+			if (islhsptr && !isrhsptr) {
+				int sz = (lhs_ty.sty_isptr > 1) ? 8 : lhs_ty.sty_size;
+				if (sz > 1) printf("	imul $%d, %%rcx\n", sz);
+			} else {
+				int sz = (lval.lval_ty.sty_isptr > 1) ? 8 : lhs_ty.sty_size;
+				if (sz > 1) printf("	imul $%d, %%rax\n", sz);
 			}
-
-			if (op->op_emit == emit_mul || op->op_emit == emit_div || op->op_emit == emit_rem) {
-				if (lhs_ty.sty_isptr > 0 || lval.lval_ty.sty_isptr > 0)
-					error("invalid pointer operation");
-			}
-
-			lval.lval_ty = lhs_ty;
-			op->op_emit(lval);
 		}
+
+		if (op->op_emit == emit_mul || op->op_emit == emit_div || op->op_emit == emit_rem) {
+			if (lhs_ty.sty_isptr > 0 || lval.lval_ty.sty_isptr > 0)
+				error("invalid pointer operation");
+		}
+
+		lval.lval_ty = lhs_ty;
+		op->op_emit(lval);
 	}
 
 	if (lval.lval_kind == REGIS) {
