@@ -48,6 +48,8 @@ struct lval;
 #define FOR      7
 #define DO       9
 #define REGISTER 10
+#define RESTRICT 11
+#define VOLATILE 12
 
 /*
  * representation of the C primitive types
@@ -56,6 +58,7 @@ struct lval;
 struct type {
 	int         ty_size;      /* size in bytes */
 	int         ty_signed;    /* is signed by default? */
+	int         ty_prio;      /* who wins the size when types combine */
 	int         ty_relate; /*
 			        * 
 				* relations are the modifiers appliable to the type,

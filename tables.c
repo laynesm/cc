@@ -20,6 +20,8 @@ const struct keyword kwtbl[] = {
 	[FOR]        = { "for",      FOR,        dofor      },
 	[DO]         = { "do",       DO,         dodowhile  },
 	[REGISTER]   = { "register", REGISTER,   doignored  },
+	[VOLATILE]   = { "volatile", VOLATILE,   doignored  },
+	[RESTRICT]   = { "restrict", RESTRICT,   doignored  },
 	[TYINT]      = { "int",      TYINT,      doty       },
 	[TYSIGNED]   = { "signed",   TYSIGNED,   doty       },
 	[TYUNSIGNED] = { "unsigned", TYUNSIGNED, doty       },
@@ -65,13 +67,13 @@ const struct unary untbl[] = {
  * We turned it into easy with that.
  */
 const struct type tytbl[] = {
-	[TYCHAR]  = { 1, 0, TYSIGN },
-	[TYSHORT] = { 2, 1, TYINT | TYSIGN},
-	[TYINT]   = { 4, 1, TYSIGN | TYLONG | TYSHORT },
-	[TYLONG]  = { 8, 1, TYINT | TYSIGN | TYLONG },
-	
-	[TYUNSIGNED] = { 4, 0, TYCHAR | TYINT | TYLONG | TYSHORT },
-	[TYSIGNED]   = { 4, 1, TYCHAR | TYINT | TYLONG | TYSHORT },
+	[TYCHAR]  = { 1, 0, 4, TYSIGN },
+	[TYSHORT] = { 2, 1, 3, TYINT | TYSIGN },
+	[TYINT]   = { 4, 1, 1, TYSIGN | TYLONG | TYSHORT },
+	[TYLONG]  = { 8, 1, 3, TYINT | TYSIGN | TYLONG },
+
+	[TYUNSIGNED] = { 4, 0, 0, TYCHAR | TYINT | TYLONG | TYSHORT },
+	[TYSIGNED]   = { 4, 1, 0, TYCHAR | TYINT | TYLONG | TYSHORT },
 };
 
 const struct keyword *kwlookup(const char *name)
