@@ -37,36 +37,29 @@ static int parse_cond(const char *father)
 	return false_lbl;
 }
 
-void doignored(struct keyword *){}
+void doignored(struct keyword *) {}
 
 void doty(struct keyword *basety)
 {
 	char buf[KWMAX];
 
-	int size, sign, sign_seen, bits, illong, seen_char, has_short, has_long;
-	const struct type *ty = &tytbl[basety->kw_id];
-	const char *savcurs = curs;
+	int bits, longs, prio, size, sign, t, isptr;
+	char *savcurs = curs;
 
 	/* doty operates on the scope-depth */
 	depth--;
 
-	illong    = 0;
-	seen_char = (basety->kw_id == TYCHAR);
-	has_short = (basety->kw_id == TYSHORT);
-	has_long  = (basety->kw_id == TYLONG);
-	sign      = ty->ty_signed;
-	sign_seen = (basety->kw_id == TYSIGNED || basety->kw_id == TYUNSIGNED);
-	bits      = basety->kw_id;
+	bits  = basety->kw_id;
+	longs = (bits == TYLONG);
 
-	if (basety->kw_id == TYCHAR)        size = 1;
-	else if (basety->kw_id == TYSHORT)  size = 2;
-	else if (basety->kw_id == TYLONG)   size = 8;
-	else                                size = 4;
-
+	/*
+	 * this part could became a whole separated function
+	 */
 	skipws();
 	while (isalpha(*curs) || *curs == '_') {
 		const struct keyword *kw;
-		
+		int id;
+
 		savcurs = curs;
 		kw = readword(buf, sizeof(buf));
 		if (!kw) {
@@ -78,49 +71,46 @@ void doty(struct keyword *basety)
 			break;
 		}
 
-		if (kw->kw_id > 0 && (kw->kw_id & (kw->kw_id - 1)) != 0)
+		id = kw->kw_id;
+
+		/* the keyword table decides who is a type */
+		if (kw->kw_func != doty)
 			error("unexpected keyword");
-		
-		if (kw->kw_id == TYCHAR) {
-			seen_char = 1;
-		} else if (kw->kw_id == TYSHORT) {
-			has_short = 1;
-			size = 2;
-		} else if (kw->kw_id == TYLONG) {
-			has_long = 1;
-			size = 8;
-		} else if (kw->kw_id == TYINT && !has_short && !has_long) {
-			size = 4;
+
+		/* the type table decides who relates to whom */
+		for (t = TYSIGNED; t <= TYLONG; t <<= 1) {
+			if ((bits & t) == 0 || (tytbl[t].ty_relate & id) != 0)
+				continue;
+			error("type '%s' does not relate to '%s'", kwtbl[t].kw_str, kw->kw_str);
 		}
 
-		if (kw->kw_id == TYSIGNED || kw->kw_id == TYUNSIGNED) {
-			sign = tytbl[kw->kw_id].ty_signed;
-			sign_seen = 1;
-		} else if (!sign_seen) {
-			sign = tytbl[kw->kw_id].ty_signed;
-		}
-	
-		if (kw->kw_id == TYLONG) {
-			if (illong) error("long long long is too much long");
-			if (bits & TYLONG) illong = 1;
-		}
-		
-		for (size_t i = 0; i < sizeof(bits) * 8; ++i) {
-			int idx = (1u << i);
-			if ((bits & idx) == 0) continue;
-			if ((tytbl[idx].ty_relate & kw->kw_id) == 0)
-				error("type '%s' does not relate to '%s'", kwtbl[idx].kw_str, kw->kw_str);
+		if (id == TYLONG) {
+			if (longs == 2) error("long long long is too much long");
+			longs++;
 		}
 
-
-		bits |= kw->kw_id;
-			
+		bits |= id;
 		skipws();
 	}
 
-	if (seen_char) size = 1;
+	/* the winning type decides the size, the sign lives in the same data */
+	prio = -1;
+	size = 0;
+	for (t = TYSIGNED; t <= TYLONG; t <<= 1) {
+		if ((bits & t) == 0 || tytbl[t].ty_prio <= prio)
+			continue;
+		prio = tytbl[t].ty_prio;
+		size = tytbl[t].ty_size;
+		sign = tytbl[t].ty_signed;
+	}
 
-	int isptr = 0;
+	/* an explicit sign always beats the type default */
+	if (bits & TYSIGNED)
+		sign = tytbl[TYSIGNED].ty_signed;
+	else if (bits & TYUNSIGNED)
+		sign = tytbl[TYUNSIGNED].ty_signed;
+
+	isptr = 0;
 
 	skipws();
 	while (*curs == '*') {
