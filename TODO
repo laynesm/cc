@@ -3,6 +3,8 @@
 ===================================================================================
 
 - Açúcar sintático. Implementar '[]' para indexação *(x+y).
+	Devemos implementar isso que nem é no C padrão, permitindo a bizarrice:
+		1[ptr] ou idx[ptr]
 
 - Ser capaz de identificar tipagem de literais e overflow/underflow básico.
 	E.g: -10 ser assinado e não atribuível a uma variável não-assinada,
