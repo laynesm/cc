@@ -30,9 +30,14 @@ struct symty expr_ty;
 static void tyassign(struct symty *dst, struct symty src)
 {
 	if (dst->sty_isptr || src.sty_isptr) {
-		if (!src.sty_isptr) error("assignment makes pointer from integer without a cast");
-		if (!dst->sty_isptr) error("assignment makes integer from pointer without a cast");
-		if (dst->sty_isptr != src.sty_isptr) error("assignment from incompatible pointer type");
+		if (!src.sty_isptr)
+			error("assignment makes pointer from integer without a "
+			      "cast");
+		if (!dst->sty_isptr)
+			error("assignment makes integer from pointer without a "
+			      "cast");
+		if (dst->sty_isptr != src.sty_isptr)
+			error("assignment from incompatible pointer type");
 		return;
 	}
 
@@ -53,7 +58,7 @@ void decl(int size, int sign, int isptr)
 		skipws();
 
 		remaining = 0;
-		
+
 		if (*curs == '=') {
 			advcurs(1);
 			expr_ty = s->sym_ty;
@@ -63,11 +68,11 @@ void decl(int size, int sign, int isptr)
 			printf("\txor %%rax,%%rax\n");
 		}
 
-		lval.lval_off = s->sym_off;
+		lval.lval_off  = s->sym_off;
 		lval.lval_kind = STACK;
-		lval.lval_ty = s->sym_ty;
-		emit_store_var(lval);
-		
+		lval.lval_ty   = s->sym_ty;
+		store(lval);
+
 		if (*curs == ',') {
 			advcurs(1);
 			remaining = 1;
@@ -94,7 +99,9 @@ void factor(void)
 		if (un->un_assoc == OPASSOCR) {
 			struct lval l = lval;
 
-			if (l.lval_off == NONE) error("l-value required for unary '%c' operand", un->un_ch);
+			if (l.lval_off == NONE)
+				error("l-value required for unary '%c' operand",
+				      un->un_ch);
 
 			if (un->un_ch == '*') {
 				if (l.lval_ty.sty_isptr == 0)
@@ -102,13 +109,12 @@ void factor(void)
 				l.lval_ty.sty_isptr--;
 			}
 
-			if (un->un_ch == '&')
-				l.lval_ty.sty_isptr++;
+			if (un->un_ch == '&') l.lval_ty.sty_isptr++;
 
 			lval.lval_kind = un->un_genlval;
-			lval.lval_off = NONE;
-			lval.lval_ty = l.lval_ty;
-			
+			lval.lval_off  = NONE;
+			lval.lval_ty   = l.lval_ty;
+
 			un->un_emit(l);
 			return;
 		}
@@ -127,11 +133,11 @@ void factor(void)
 	}
 
 	if (isalpha(*curs)) {
-		struct sym *s = readsym(-1);
+		struct sym *s  = readsym(-1);
 		lval.lval_kind = STACK;
-		lval.lval_off = s->sym_off;
-		lval.lval_ty = s->sym_ty;
-		emit_load_var(lval);
+		lval.lval_off  = s->sym_off;
+		lval.lval_ty   = s->sym_ty;
+		load(lval);
 		return;
 	}
 
@@ -141,9 +147,9 @@ void factor(void)
 	curs = end;
 	skipws();
 
-	emit_retval(val);
+	retval(val);
 	lval.lval_kind = NONE;
-	lval.lval_ty = expr_ty.sty_isptr ? defty : expr_ty;
+	lval.lval_ty   = expr_ty.sty_isptr ? defty : expr_ty;
 }
 
 void expr(int min_prec)
@@ -154,32 +160,33 @@ void expr(int min_prec)
 
 	for (;;) {
 		const struct operator *op = opundercurs();
-		struct symty lhs_ty;
+		struct symty           lhs_ty;
 
 		if (!op || op->op_precedence < min_prec) break;
 		advcurs(op->op_slen);
-		
+
 		if (op->op_assoc == OPASSOCR) {
 			struct lval l = lval;
-			if (l.lval_kind == NONE) error("assignment without an l-value.");
-			if (l.lval_kind == REGIS) emit_regis_preamble();
+			if (l.lval_kind == NONE)
+				error("assignment without an l-value.");
+			if (l.lval_kind == REGIS) regispre();
 			expr_ty = l.lval_ty;
 			expr(op->op_precedence);
-			if (l.lval_kind == REGIS) emit_regis_postamble();
-			
+			if (l.lval_kind == REGIS) regispost();
+
 			tyassign(&l.lval_ty, lval.lval_ty);
-			
+
 			op->op_emit(l);
 
 			lval.lval_kind = NONE;
-			lval.lval_ty = l.lval_ty;
+			lval.lval_ty   = l.lval_ty;
 			continue;
 		}
 
 		/*
 		 * If it is left-associated, overwrite the l-value.
 		 */
-		lhs_ty = lval.lval_ty;
+		lhs_ty         = lval.lval_ty;
 		lval.lval_kind = lval.lval_off = NONE;
 
 		printf("	push %%rax\n");
@@ -189,20 +196,25 @@ void expr(int min_prec)
 
 		printf("	xchg %%rax, %%rcx\n");
 
-		if (op->op_emit == emit_add || op->op_emit == emit_sub) {
+		if (op->op_emit == add || op->op_emit == sub) {
 			int islhsptr = lhs_ty.sty_isptr;
 			int isrhsptr = lval.lval_ty.sty_isptr;
 
 			if (islhsptr && !isrhsptr) {
-				int sz = (lhs_ty.sty_isptr > 1) ? 8 : lhs_ty.sty_size;
+				int sz = (lhs_ty.sty_isptr > 1)
+				                 ? 8
+				                 : lhs_ty.sty_size;
 				if (sz > 1) printf("	imul $%d, %%rcx\n", sz);
 			} else {
-				int sz = (lval.lval_ty.sty_isptr > 1) ? 8 : lhs_ty.sty_size;
+				int sz = (lval.lval_ty.sty_isptr > 1)
+				                 ? 8
+				                 : lhs_ty.sty_size;
 				if (sz > 1) printf("	imul $%d, %%rax\n", sz);
 			}
 		}
 
-		if (op->op_emit == emit_mul || op->op_emit == emit_div || op->op_emit == emit_rem) {
+		if (op->op_emit == mul || op->op_emit == idiv ||
+		    op->op_emit == rem) {
 			if (lhs_ty.sty_isptr > 0 || lval.lval_ty.sty_isptr > 0)
 				error("invalid pointer operation");
 		}
@@ -212,7 +224,7 @@ void expr(int min_prec)
 	}
 
 	if (lval.lval_kind == REGIS) {
-		emit_deptr(lval);
+		deptr(lval);
 		lval.lval_kind = NONE;
 	}
 

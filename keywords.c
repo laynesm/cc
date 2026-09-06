@@ -31,8 +31,8 @@ static int parse_cond(const char *father)
 	if (*curs != ')') error("missing ')' for %s", father);
 	advcurs(1);
 
-	emit_cmp(0);
-	emit_je_label(false_lbl);
+	cmp(0);
+	jelbl(false_lbl);
 
 	return false_lbl;
 }
@@ -43,7 +43,7 @@ void doty(struct keyword *basety)
 {
 	char buf[KWMAX];
 
-	int bits, longs, prio, size, sign, t, isptr;
+	int   bits, longs, prio, size, sign, t, isptr;
 	char *savcurs = curs;
 
 	/* doty operates on the scope-depth */
@@ -58,15 +58,16 @@ void doty(struct keyword *basety)
 	skipws();
 	while (isalpha(*curs) || *curs == '_') {
 		const struct keyword *kw;
-		int id;
+		int                   id;
 
 		savcurs = curs;
-		kw = readword(buf, sizeof(buf));
+		kw      = readword(buf, sizeof(buf));
 		if (!kw) {
 			/*
-			 * we would like to read the identifier here to you know, do a variable declaration.
+			 * we would like to read the identifier here to you
+			 * know, do a variable declaration.
 			 */
-			curs = savcurs;
+			curs    = savcurs;
 			savcurs = NULL;
 			break;
 		}
@@ -74,18 +75,19 @@ void doty(struct keyword *basety)
 		id = kw->kw_id;
 
 		/* the keyword table decides who is a type */
-		if (kw->kw_func != doty)
-			error("unexpected keyword");
+		if (kw->kw_func != doty) error("unexpected keyword");
 
 		/* the type table decides who relates to whom */
 		for (t = TYSIGNED; t <= TYLONG; t <<= 1) {
 			if ((bits & t) == 0 || (tytbl[t].ty_relate & id) != 0)
 				continue;
-			error("type '%s' does not relate to '%s'", kwtbl[t].kw_str, kw->kw_str);
+			error("type '%s' does not relate to '%s'",
+			      kwtbl[t].kw_str, kw->kw_str);
 		}
 
 		if (id == TYLONG) {
-			if (longs == 2) error("long long long is too much long");
+			if (longs == 2)
+				error("long long long is too much long");
 			longs++;
 		}
 
@@ -97,8 +99,7 @@ void doty(struct keyword *basety)
 	prio = -1;
 	size = 0;
 	for (t = TYSIGNED; t <= TYLONG; t <<= 1) {
-		if ((bits & t) == 0 || tytbl[t].ty_prio <= prio)
-			continue;
+		if ((bits & t) == 0 || tytbl[t].ty_prio <= prio) continue;
 		prio = tytbl[t].ty_prio;
 		size = tytbl[t].ty_size;
 		sign = tytbl[t].ty_signed;
@@ -133,7 +134,7 @@ void doreturn(struct keyword *)
 {
 	expr_ty = defty;
 	expr(0);
-	emit_jmp(".L_ret_main");
+	jmp(".L_ret_main");
 }
 
 void doif(struct keyword *)
@@ -143,25 +144,25 @@ void doif(struct keyword *)
 	stmt(); /* Parse the TRUE block */
 
 	skipws();
-	/* 
+	/*
 	 * i like the function readkeyword
 	 */
-	if ((isalpha(*curs) || *curs == '_') && readkeyword(0,ELSE)) {
+	if ((isalpha(*curs) || *curs == '_') && readkeyword(0, ELSE)) {
 		int end_lbl = newlbl();
 
 		/* If true block finishes, jump over the else block */
-		emit_jmp_label(end_lbl);
+		jmplbl(end_lbl);
 
 		/* Label for the else (false) block */
-		emit_label_id(false_lbl);
+		idlbl(false_lbl);
 		stmt(); /* Parse the FALSE block */
 
-		emit_label_id(end_lbl);
+		idlbl(end_lbl);
 		return;
 	}
 
 	/* No else found, just mark the end of the true block */
-	emit_label_id(false_lbl);
+	idlbl(false_lbl);
 }
 
 void dowhile(struct keyword *)
@@ -169,15 +170,15 @@ void dowhile(struct keyword *)
 	int start_lbl = newlbl();
 	int false_lbl;
 
-	emit_label_id(start_lbl);
+	idlbl(start_lbl);
 
 	false_lbl = parse_cond("while");
 
 	stmt(); /* Loop body */
 
 	/* Jump back to the condition check */
-	emit_jmp_label(start_lbl);
-	emit_label_id(false_lbl);
+	jmplbl(start_lbl);
+	idlbl(false_lbl);
 }
 
 void dofor(struct keyword *)
@@ -190,7 +191,7 @@ void dodowhile(struct keyword *)
 	int start_lbl = newlbl();
 	int end_lbl   = newlbl();
 
-	emit_label_id(start_lbl);
+	idlbl(start_lbl);
 
 	stmt();
 
@@ -213,10 +214,10 @@ void dodowhile(struct keyword *)
 	advcurs(1);
 	if (*curs != ';') error("missing ';'");
 
-	emit_cmp(0);
-	emit_jne_label(start_lbl);
+	cmp(0);
+	jnelbl(start_lbl);
 
-	emit_label_id(end_lbl);
+	idlbl(end_lbl);
 }
 
 void doelse(void)
