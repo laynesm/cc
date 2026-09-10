@@ -200,12 +200,15 @@ void expr(int min_prec)
 			int islhsptr = lhs_ty.sty_isptr;
 			int isrhsptr = lval.lval_ty.sty_isptr;
 
+			if (islhsptr && isrhsptr)
+				error("invalid pointer arithmetic");
+
 			if (islhsptr && !isrhsptr) {
 				int sz = (lhs_ty.sty_isptr > 1)
 				                 ? 8
 				                 : lhs_ty.sty_size;
 				if (sz > 1) printf("	imul $%d, %%rcx\n", sz);
-			} else {
+			} else if (isrhsptr && !islhsptr) {
 				int sz = (lval.lval_ty.sty_isptr > 1)
 				                 ? 8
 				                 : lhs_ty.sty_size;
