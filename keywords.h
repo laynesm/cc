@@ -9,5 +9,7 @@ void doreturn(struct keyword *);
 void dowhile(struct keyword *);
 void dofor(struct keyword *);
 void dodowhile(struct keyword *);
+void dobreak(struct keyword *);
+void docontinue(struct keyword *);
 
 #endif

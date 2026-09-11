@@ -54,6 +54,8 @@ struct lval;
 #define REGISTER 10
 #define RESTRICT 11
 #define VOLATILE 12
+#define BREAK    13
+#define CONTINUE 14
 
 /*
  * representation of the C primitive types

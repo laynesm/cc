@@ -11,9 +11,33 @@
 
 static int lblcnt = 0;
 
+/*
+ * stack of the innermost loop's break/continue targets.
+ * break jumps to the loop-end label, continue to the loop-top
+ * label (for the increment step in 'for', the condition in
+ * while/do-while).
+ */
+#define LOOPMAX 64
+static int brklbl[LOOPMAX];
+static int cntlbl[LOOPMAX];
+static int looppos = 0;
+
 static int newlbl(void)
 {
 	return lblcnt++;
+}
+
+static void looppush(int brk, int cnt)
+{
+	if (looppos == LOOPMAX) error("too many nested loops");
+	brklbl[looppos] = brk;
+	cntlbl[looppos] = cnt;
+	looppos++;
+}
+
+static void looppop(void)
+{
+	looppos--;
 }
 
 static int parse_cond(const char *father)
@@ -174,16 +198,20 @@ void dowhile(struct keyword *)
 
 	false_lbl = parse_cond("while");
 
+	looppush(false_lbl, start_lbl);
+
 	stmt(STMT); /* Loop body */
 
 	/* Jump back to the condition check */
 	jmplbl(start_lbl);
 	idlbl(false_lbl);
+
+	looppop();
 }
 
 void dofor(struct keyword *)
 {
-	int   cond_lbl, end_lbl;
+	int   cond_lbl, end_lbl, cont_lbl;
 	char *post_start, *post_end, *body_end;
 	int   parens = 0;
 
@@ -198,6 +226,7 @@ void dofor(struct keyword *)
 
 	cond_lbl = newlbl();
 	end_lbl  = newlbl();
+	cont_lbl = newlbl();
 
 	idlbl(cond_lbl);
 	skipws();
@@ -226,8 +255,12 @@ void dofor(struct keyword *)
 	post_end = curs;
 	advcurs(1);
 
+	looppush(end_lbl, cont_lbl);
+
 	stmt(STMT);
 	body_end = curs;
+
+	idlbl(cont_lbl);
 
 	curs = post_start;
 	skipws();
@@ -241,15 +274,19 @@ void dofor(struct keyword *)
 	jmplbl(cond_lbl);
 	idlbl(end_lbl);
 
+	looppop();
 	symdrop(depth);
 }
 
 void dodowhile(struct keyword *)
 {
 	int start_lbl = newlbl();
+	int cont_lbl  = newlbl();
 	int end_lbl   = newlbl();
 
 	idlbl(start_lbl);
+
+	looppush(end_lbl, cont_lbl);
 
 	stmt(STMT);
 
@@ -265,6 +302,8 @@ void dodowhile(struct keyword *)
 	skipws();
 	if (*curs != '(') error("'(' expected after do-while");
 	advcurs(1);
+
+	idlbl(cont_lbl);
 	expr_ty = defty;
 	expr(0);
 	skipws();
@@ -276,9 +315,33 @@ void dodowhile(struct keyword *)
 	jnelbl(start_lbl);
 
 	idlbl(end_lbl);
+
+	looppop();
 }
 
 void doelse(void)
 {
 	error("orphan else");
+}
+
+void dobreak(struct keyword *)
+{
+	if (looppos == 0) error("break outside of a loop");
+
+	skipws();
+	if (*curs != ';') error("expected ';' after break");
+	advcurs(1);
+
+	jmplbl(brklbl[looppos - 1]);
+}
+
+void docontinue(struct keyword *)
+{
+	if (looppos == 0) error("continue outside of a loop");
+
+	skipws();
+	if (*curs != ';') error("expected ';' after continue");
+	advcurs(1);
+
+	jmplbl(cntlbl[looppos - 1]);
 }

@@ -28,6 +28,8 @@ const struct keyword kwtbl[] = {
 	[TYLONG]     = {"long", TYLONG, doty},
 	[TYSHORT]    = {"short", TYSHORT, doty},
 	[TYCHAR]     = {"char", TYCHAR, doty},
+	[BREAK]      = {"break", BREAK, dobreak},
+	[CONTINUE]   = {"continue", CONTINUE, docontinue},
 };
 
 /*
