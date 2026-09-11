@@ -17,6 +17,10 @@ struct lval;
 #define OPASSOCL (0)
 #define OPASSOCR (1)
 
+/* statement modes passed to stmt() */
+#define STMT   (0)
+#define DECEXP (1)
+
 /* operations */
 #define OPEQ     0
 #define OPNEQ    1

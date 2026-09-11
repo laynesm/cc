@@ -6,7 +6,7 @@ extern const struct symty defty;
 
 void decl(int, int, int);
 void factor(void);
-void stmt(void);
+void stmt(int);
 void expr(int);
 void prog(void);
 

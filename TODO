@@ -13,8 +13,8 @@
 
 - Começar a pensar em overflow-safety (só trocar o strtol por algo mais seguro que lida com overflow de long e auto-unsigned caso necessário (ul))
 
+- Implementar break/continue
 - Implementar goto e labels (parece simples)
-- Fazer o for (agora é realmente simples)
 - Implementar o switch 
 
 ===================================================================================

@@ -141,7 +141,7 @@ void doif(struct keyword *)
 {
 	int false_lbl = parse_cond("if");
 
-	stmt(); /* Parse the TRUE block */
+	stmt(STMT); /* Parse the TRUE block */
 
 	skipws();
 	/*
@@ -155,7 +155,7 @@ void doif(struct keyword *)
 
 		/* Label for the else (false) block */
 		idlbl(false_lbl);
-		stmt(); /* Parse the FALSE block */
+		stmt(STMT); /* Parse the FALSE block */
 
 		idlbl(end_lbl);
 		return;
@@ -174,7 +174,7 @@ void dowhile(struct keyword *)
 
 	false_lbl = parse_cond("while");
 
-	stmt(); /* Loop body */
+	stmt(STMT); /* Loop body */
 
 	/* Jump back to the condition check */
 	jmplbl(start_lbl);
@@ -183,7 +183,65 @@ void dowhile(struct keyword *)
 
 void dofor(struct keyword *)
 {
-	error("for is not implemented yet");
+	int   cond_lbl, end_lbl;
+	char *post_start, *post_end, *body_end;
+	int   parens = 0;
+
+	skipws();
+	if (*curs != '(') error("'(' expected after for");
+	advcurs(1);
+
+	skipws();
+	expr_ty = defty;
+	stmt(DECEXP);
+	skipws();
+
+	cond_lbl = newlbl();
+	end_lbl  = newlbl();
+
+	idlbl(cond_lbl);
+	skipws();
+
+	if (*curs != ';') {
+		expr_ty = defty;
+		expr(0);
+		cmp(0);
+		jelbl(end_lbl);
+	}
+
+	if (*curs != ';') error("expected ';' in for cond");
+	advcurs(1);
+
+	post_start = curs;
+	while ((*curs != ')' || parens > 0) && *curs != '\0') {
+		if (*curs == '(')
+			parens++;
+		else if (*curs == ')')
+			parens--;
+		curs++;
+	}
+
+	if (*curs != ')') error("missing ')' in for");
+	
+	post_end = curs;
+	advcurs(1);
+
+	stmt(STMT);
+	body_end = curs;
+
+	curs = post_start;
+	skipws();
+	if (curs != post_end) {
+		expr_ty = defty;
+		expr(-1);
+	}
+
+	curs = body_end;
+
+	jmplbl(cond_lbl);
+	idlbl(end_lbl);
+
+	symdrop(depth);
 }
 
 void dodowhile(struct keyword *)
@@ -193,7 +251,7 @@ void dodowhile(struct keyword *)
 
 	idlbl(start_lbl);
 
-	stmt();
+	stmt(STMT);
 
 	skipws();
 

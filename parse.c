@@ -6,6 +6,7 @@
 #include "cc.h"
 #include "emit.h"
 #include "ident.h"
+#include "keywords.h"
 #include "parse.h"
 #include "util.h"
 
@@ -234,7 +235,7 @@ void expr(int min_prec)
 	expr_ty = saved;
 }
 
-void stmt(void)
+void stmt(int mode)
 {
 	skipws();
 
@@ -252,13 +253,15 @@ void stmt(void)
 	}
 
 	if (*curs == '{') {
+		if (mode != STMT)
+			error("a declaration or an expression was expected here");
 		advcurs(1);
 		depth++;
 
 		skipws();
 		while (*curs != '}') {
 			if (*curs == '\0') error("expected }");
-			stmt();
+			stmt(STMT);
 			skipws();
 		}
 
@@ -270,6 +273,13 @@ void stmt(void)
 	if (isalpha(*curs) || curs[0] == '_' || curs[0] == '$') {
 		const struct keyword *kw = readkeyword(0, -1);
 		if (kw) {
+			/*
+			 * DECEXP only accepts declarations (a type) or plain
+			 * expressions, so any other keyword is rejected.
+			 */
+			if (mode == DECEXP && kw->kw_func != doty)
+				error("a declaration or an expression was expected "
+				      "here");
 			/*
 			 * this is a feature so we get to parse things like:
 			 * if ((int n = stuff()) < 0)
@@ -300,7 +310,7 @@ void prog(void)
 	skipws();
 
 	while (*curs != '\0') {
-		stmt();
+		stmt(STMT);
 		skipws();
 	}
 }
