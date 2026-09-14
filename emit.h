@@ -13,12 +13,15 @@ struct lval {
 	struct symty lval_ty;
 };
 
+extern struct lval lval;
+
 void regispre(void);
 void regispost(void);
 
 void deptr(struct lval);
 void ptr(struct lval);
 
+void idx(struct lval);
 void cmp(long);
 void jmplbl(int);
 void jnelbl(int);

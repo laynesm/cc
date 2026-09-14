@@ -34,6 +34,7 @@ const struct keyword kwtbl[] = {
 
 /*
  * Probably '=' should be a operator too.
+ * it is already. am i dummy?
  */
 const struct operator optbl[OPNUM] = {
 	[OPEQ]     = {.op_str        = "==",
@@ -81,6 +82,7 @@ const struct operator optbl[OPNUM] = {
                       .op_precedence = 1,
                       .op_emit       = rem},
 	[OPASSIGN] = {"=", 1, -1, OPASSOCR, store},
+	[OPIDX]    = {"[", 1, 2, OPASSOCL, idx},
 };
 
 /*

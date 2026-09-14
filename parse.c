@@ -10,7 +10,7 @@
 #include "parse.h"
 #include "util.h"
 
-static struct lval lval;
+struct lval lval;
 
 /*
  * expression results that are not backed by a symbol
@@ -192,36 +192,29 @@ void expr(int min_prec)
 
 		printf("	push %%rax\n");
 		expr_ty = lhs_ty;
-		expr(op->op_precedence + 1);
+		expr(op->op_emit == idx ? -1 : op->op_precedence + 1);
 		printf("	pop %%rcx\n");
 
 		printf("	xchg %%rax, %%rcx\n");
 
-		if (op->op_emit == add || op->op_emit == sub) {
+		if (op->op_emit == add || op->op_emit == sub || op->op_emit == idx) {
 			int islhsptr = lhs_ty.sty_isptr;
 			int isrhsptr = lval.lval_ty.sty_isptr;
 
-			if (islhsptr && isrhsptr)
-				error("invalid pointer arithmetic");
+			if (islhsptr && isrhsptr) error("both operands are pointers");
 
-			if (islhsptr && !isrhsptr) {
-				int sz = (lhs_ty.sty_isptr > 1)
-				                 ? 8
-				                 : lhs_ty.sty_size;
-				if (sz > 1) printf("	imul $%d, %%rcx\n", sz);
-			} else if (isrhsptr && !islhsptr) {
-				int sz = (lval.lval_ty.sty_isptr > 1)
-				                 ? 8
-				                 : lhs_ty.sty_size;
-				if (sz > 1) printf("	imul $%d, %%rax\n", sz);
+			if (islhsptr || isrhsptr) {
+				struct symty *ptr_ty = islhsptr ? &lhs_ty : &lval.lval_ty;
+				const char   *reg    = islhsptr ? "%rcx" : "%rax";
+				int           sz     = ptr_ty->sty_isptr > 1 ? 8 : ptr_ty->sty_size;
+
+				if (isrhsptr) lhs_ty = lval.lval_ty;
+				if (sz > 1) printf("	imul $%d, %s\n", sz, reg);
 			}
 		}
 
-		if (op->op_emit == mul || op->op_emit == idiv ||
-		    op->op_emit == rem) {
-			if (lhs_ty.sty_isptr > 0 || lval.lval_ty.sty_isptr > 0)
-				error("invalid pointer operation");
-		}
+		if ((op->op_emit == mul || op->op_emit == idiv || op->op_emit == rem) && (lhs_ty.sty_isptr > 0 || lval.lval_ty.sty_isptr > 0))
+			error("invalid pointer operation");
 
 		lval.lval_ty = lhs_ty;
 		op->op_emit(lval);
@@ -254,7 +247,8 @@ void stmt(int mode)
 
 	if (*curs == '{') {
 		if (mode != STMT)
-			error("a declaration or an expression was expected here");
+			error("a declaration or an expression was expected "
+			      "here");
 		advcurs(1);
 		depth++;
 
@@ -278,7 +272,8 @@ void stmt(int mode)
 			 * expressions, so any other keyword is rejected.
 			 */
 			if (mode == DECEXP && kw->kw_func != doty)
-				error("a declaration or an expression was expected "
+				error("a declaration or an expression was "
+				      "expected "
 				      "here");
 			/*
 			 * this is a feature so we get to parse things like:

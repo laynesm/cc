@@ -45,6 +45,18 @@ static void store_mem(int off, const char *to, int size)
 	}
 }
 
+void idx(struct lval l)
+{
+	skipws();
+	if (*curs != ']') error("expected ']'");
+	advcurs(1);
+
+	printf("	add %%rcx, %%rax\n");
+	lval.lval_kind = REGIS;
+
+	if (lval.lval_ty.sty_isptr > 0) lval.lval_ty.sty_isptr--;
+}
+
 void regispre(void)
 {
 	printf("	push %%rax\n");

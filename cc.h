@@ -34,7 +34,8 @@ struct lval;
 #define OPDIV    9
 #define OPREM    10
 #define OPASSIGN 11
-#define OPNUM    12
+#define OPIDX    12
+#define OPNUM    13
 
 #define TYSIGNED   (1)
 #define TYUNSIGNED (2)
