@@ -78,5 +78,6 @@ void rem(struct lval);
 void bnot(struct lval);
 void lnot(struct lval);
 void pos(struct lval);
+void cast(struct symty *);
 
 #endif

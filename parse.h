@@ -12,5 +12,6 @@ void factor(void);
 void stmt(int);
 void expr(int);
 void prog(void);
+struct symty *parsety(int);
 
 #endif

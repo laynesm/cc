@@ -19,6 +19,11 @@ void readident(char *, size_t);
 const struct keyword *readword(char *, size_t);
 
 /*
+ * looks at the word under the cursor without consuming it
+ */
+const struct keyword *peekword(void);
+
+/*
  * reads a keyword or gets the cursor back
  */
 const struct keyword *readkeyword(int,int);

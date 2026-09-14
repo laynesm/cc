@@ -59,6 +59,34 @@ void readident(char *buf, size_t len)
 	if (kw) error("unexpected keyword '%s'", kw->kw_str);
 }
 
+/*
+ * looks at the word under the cursor (readword-style) without consuming
+ * it, and returns its keyword if any. never errors on non-alphabetic
+ * input: digits start a literal, not a keyword candidate.
+ */
+const struct keyword *peekword(void)
+{
+	static char buf[KWMAX];
+	char       *start;
+	size_t      n;
+
+	skipws();
+	start = curs;
+	if (!isalpha(*curs) && *curs != '_' && *curs != '$')
+		return NULL;
+
+	do curs++;
+	while (isalnum(*curs) || *curs == '_' || *curs == '$' || *curs == '?');
+
+	n = (size_t)(curs - start);
+	if (n >= KWMAX) n = KWMAX - 1;
+	memcpy(buf, start, n);
+	buf[n] = '\0';
+
+	curs = start;
+	return kwlookup(buf);
+}
+
 const struct keyword *readword(char *buf, size_t len)
 {
 	char  *start;

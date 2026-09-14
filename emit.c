@@ -318,6 +318,27 @@ void neg(struct lval)
 	printf("	neg %%rax\n");
 }
 
+void cast(struct symty *ty)
+{
+	/* only the width matters: rax already holds the whole value */
+	if (ty->sty_kind != TYSCALR) return;
+
+	switch (ty->sty_size) {
+	case 1:
+		printf("	mov%cb %%al, %%eax\n", ty->sty_signed ? 's' : 'z');
+		break;
+	case 2:
+		printf("	mov%cw %%ax, %%eax\n", ty->sty_signed ? 's' : 'z');
+		break;
+	case 4:
+		printf("	%s %%eax, %s\n", ty->sty_signed ? "movslq" : "movl",
+		       ty->sty_signed ? "%rax" : "%eax");
+		break;
+	default:
+		break;
+	}
+}
+
 void retval(unsigned long long val)
 {
 	printf("	mov $%llu,%%rax\n", val);

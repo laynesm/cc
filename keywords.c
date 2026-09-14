@@ -6,6 +6,7 @@
 #include "cc.h"
 #include "emit.h"
 #include "ident.h"
+#include "keywords.h"
 #include "parse.h"
 #include "util.h"
 
@@ -76,39 +77,33 @@ void dogoto(struct keyword *)
 	printf("	jmp .L_lbl_%s\n", name);
 }
 
-void doty(struct keyword *basety)
+/*
+ * consumes the type keywords that follow an already-consumed first one
+ * (given by 'first') and returns the type they describe. used by both
+ * doty() (declarations) and the cast branch in parse.c: they share the
+ * relation and sign rules, so a cast is just another direction of use.
+ */
+struct symty *parsety(int first)
 {
 	char buf[KWMAX];
-
 	int   bits, longs, prio, size, sign, t;
-	char *savcurs = curs;
 
-	/* doty operates on the scope-depth */
-	depth--;
+	bits  = first;
+	longs = (first == TYLONG);
 
-	bits  = basety->kw_id;
-	longs = (bits == TYLONG);
-
-	/*
-	 * this part could became a whole separated function
-	 */
 	skipws();
 	while (isalpha(*curs) || *curs == '_') {
-		const struct keyword *kw;
 		int                   id;
+		const struct keyword *kw = peekword();
 
-		savcurs = curs;
-		kw      = readword(buf, sizeof(buf));
-		if (!kw) {
-			curs    = savcurs;
-			savcurs = NULL;
-			break;
-		}
-
-		id = kw->kw_id;
+		if (!kw) break;
 
 		/* the keyword table decides who is a type */
 		if (kw->kw_func != doty) error("unexpected keyword");
+
+		/* consume the peeked type keyword */
+		kw = readword(buf, sizeof(buf));
+		id = kw->kw_id;
 
 		/* the type table decides who relates to whom */
 		for (t = TYSIGNED; t <= TYLONG; t <<= 1) {
@@ -139,10 +134,22 @@ void doty(struct keyword *basety)
 	}
 
 	/* an explicit sign always beats the type default */
-	if (bits & TYSIGNED)
+	if (bits & TYSIGNED) {
 		sign = tytbl[TYSIGNED].ty_signed;
-	else if (bits & TYUNSIGNED)
+	} else if (bits & TYUNSIGNED) {
 		sign = tytbl[TYUNSIGNED].ty_signed;
+	}
+
+	return sclty(size, sign);
+}
+
+void doty(struct keyword *basety)
+{
+	struct symty *ty = parsety(basety->kw_id);
+	char         *savcurs;
+
+	/* doty operates on the scope-depth */
+	depth--;
 
 	skipws();
 	savcurs = curs;
@@ -156,7 +163,7 @@ void doty(struct keyword *basety)
 
 	if (isalpha(*curs) || *curs == '_' || *curs == '$') {
 		curs = savcurs;
-		decl(sclty(size, sign));
+		decl(ty);
 	} else {
 		warn("cast not yet implemented");
 	}

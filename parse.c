@@ -143,6 +143,44 @@ void factor(void)
 	}
 
 	if (*curs == '(') {
+		const struct keyword *kw;
+		struct symty         *cty;
+		const char           *savcurs = curs;
+
+		advcurs(1);
+		kw = peekword();
+
+		/*
+		 * a type keyword right after '(' is the leading edge of a
+		 * cast. parsety() (shared with doty) decides the type.
+		 */
+		if (kw && kw->kw_func == doty) {
+			struct lval l;
+			char        buf[KWMAX];
+
+			skipws();
+			kw  = readword(buf, sizeof(buf));
+			cty = parsety(kw->kw_id);
+			skipws();
+			while (*curs == '*') {
+				cty = mkptr(cty);
+				advcurs(1);
+			}
+			skipws();
+			if (*curs != ')') error("expected ')' after cast");
+			advcurs(1);
+
+			factor();
+			l = lval;
+			if (l.lval_kind == REGIS) deptr(l);
+			cast(cty);
+			lval.lval_kind = NONE;
+			lval.lval_off  = NONE;
+			lval.lval_ty   = cty;
+			return;
+		}
+
+		curs = savcurs;
 		advcurs(1);
 		expr(-1);
 		skipws();
