@@ -123,13 +123,13 @@ void factor(void)
 				error("l-value required for unary '%s' operand",
 				      un->un_str);
 
-			if (un->un_emit == pos && *un->un_str == '*') {
+			if (un->un_ptr == DEPTR) {
 				if (l.lval_ty.sty_isptr == 0)
 					error("cannot dereference non-pointer");
 				l.lval_ty.sty_isptr--;
 			}
 
-			if (un->un_emit == ptr) l.lval_ty.sty_isptr++;
+			if (un->un_ptr == GENPTR) l.lval_ty.sty_isptr++;
 
 			lval.lval_kind = un->un_genlval;
 			lval.lval_off  = NONE;
@@ -208,7 +208,7 @@ void pointarith(const struct operator *op, struct symty *lhsty, struct symty *rh
 	if (!islhsptr && !isrhsptr) return;
 	if (iscompound && isrhsptr && !islhsptr) error("assignment makes integer from pointer without a cast");
 
-	if (op->op_emit == mul || op->op_emit == idiv || op->op_emit == rem || op->op_emit == muleq || op->op_emit == diveq || op->op_emit == remeq)
+	if (op->op_ptr == NOPTR)
 		error("invalid pointer operation");
 
 	if (isrhsptr) *lhsty = *rhsty;
@@ -237,10 +237,10 @@ void expr(int min_prec)
 			expr(op->op_precedence);
 			if (l.lval_kind == REGIS) regispost();
 
-			if (op->op_emit == store || (!l.lval_ty.sty_isptr && !lval.lval_ty.sty_isptr))
+			if (op->op_assign == ASTORE || (!l.lval_ty.sty_isptr && !lval.lval_ty.sty_isptr))
 				tyassign(&l.lval_ty, lval.lval_ty);
 
-			if (op->op_emit != store) pointarith(op, &l.lval_ty, &lval.lval_ty, 1);
+			if (op->op_assign != ASTORE) pointarith(op, &l.lval_ty, &lval.lval_ty, 1);
 
 			op->op_emit(l);
 
@@ -257,12 +257,12 @@ void expr(int min_prec)
 
 		printf("	push %%rax\n");
 		expr_ty = lhs_ty;
-		expr(op->op_emit == idx ? -1 : op->op_precedence + 1);
+		expr(op->op_postfix ? -1 : op->op_precedence + 1);
 		printf("	pop %%rcx\n");
 
 		printf("	xchg %%rax, %%rcx\n");
 
-		if (op->op_emit == add || op->op_emit == sub || op->op_emit == idx || op->op_emit == mul || op->op_emit == idiv || op->op_emit == rem)
+		if (op->op_ptr == PTRARITH || op->op_ptr == NOPTR)
 			pointarith(op, &lhs_ty, &lval.lval_ty, 0);
 
 		lval.lval_ty = lhs_ty;

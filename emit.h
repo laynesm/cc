@@ -21,6 +21,24 @@ void regispost(void);
 void deptr(struct lval);
 void ptr(struct lval);
 
+void inc(struct lval);
+void dec(struct lval);
+
+void and(struct lval);
+void or(struct lval);
+
+void band(struct lval);
+void bor(struct lval);
+void bxor(struct lval);
+void bshl(struct lval);
+void bshr(struct lval);
+
+void bandeq(struct lval);
+void boreq(struct lval);
+void bxoreq(struct lval);
+void bshleq(struct lval);
+void bshreq(struct lval);
+
 void preinc(struct lval);
 void predec(struct lval);
 

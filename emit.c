@@ -52,7 +52,7 @@ static void someq(struct lval l, const char *inst, const char *outreg)
 	load(l);
 	printf("	pop %%rcx\n");
 	printf("	%s %%rcx,%%rax\n", inst);
-	if (strcmp(outreg, "rax") != 0) printf("	mov %%%s,%%rax", outreg);
+	if (strcmp(outreg, "rax") != 0) printf("	mov %%%s,%%rax\n", outreg);
 	store(l);
 }
 
@@ -79,6 +79,39 @@ void diveq(struct lval l)
 void remeq(struct lval l)
 {
 	someq(l, "idiv", "rdx");
+}
+
+void bandeq(struct lval l)
+{
+	someq(l, "and", "rax");
+}
+
+void boreq(struct lval l)
+{
+	someq(l, "or", "rax");
+}
+
+void bxoreq(struct lval l)
+{
+	someq(l, "xor", "rax");
+}
+
+void bshleq(struct lval l)
+{
+	printf("	push %%rax\n");
+	load(l);
+	printf("	pop %%rcx\n");
+	printf("	shl %%cl, %%rax\n");
+	store(l);
+}
+
+void bshreq(struct lval l)
+{
+	printf("	push %%rax\n");
+	load(l);
+	printf("	pop %%rcx\n");
+	printf("	shr %%cl, %%rax\n");
+	store(l);
 }
 
 void idx(struct lval l)
@@ -109,7 +142,27 @@ void predec(struct lval l)
 	if (l.lval_ty.sty_isptr > 0)
 		sz = l.lval_ty.sty_isptr > 1 ? 8 : l.lval_ty.sty_size;
 
-	printf("	sub $%d, %%rax", sz);
+	printf("	sub $%d, %%rax\n", sz);
+	store(l);
+}
+
+void inc(struct lval l)
+{
+	int sz = 1;
+	if (l.lval_ty.sty_isptr > 0)
+		sz = l.lval_ty.sty_isptr > 1 ? 8 : l.lval_ty.sty_size;
+
+	printf("	add $%d, %%rax\n", sz);
+	store(l);
+}
+
+void dec(struct lval l)
+{
+	int sz = 1;
+	if (l.lval_ty.sty_isptr > 0)
+		sz = l.lval_ty.sty_isptr > 1 ? 8 : l.lval_ty.sty_size;
+
+	printf("	sub $%d, %%rax\n", sz);
 	store(l);
 }
 
@@ -300,4 +353,51 @@ void idiv(struct lval)
 void rem(struct lval)
 {
 	printf("	cqo\n	idiv %%rcx\n	mov %%rdx, %%rax\n");
+}
+
+void and(struct lval)
+{
+	printf("	test %%rax,%%rax\n");
+	printf("	setne %%al\n");
+	printf("	movzbq %%al,%%rax\n");
+	printf("	test %%rcx,%%rcx\n");
+	printf("	setne %%cl\n");
+	printf("	movzbq %%cl,%%rcx\n");
+	printf("	and %%rcx,%%rax\n");
+}
+
+void or(struct lval)
+{
+	printf("	test %%rax,%%rax\n");
+	printf("	setne %%al\n");
+	printf("	movzbq %%al,%%rax\n");
+	printf("	test %%rcx,%%rcx\n");
+	printf("	setne %%cl\n");
+	printf("	movzbq %%cl,%%rcx\n");
+	printf("	or %%rcx,%%rax\n");
+}
+
+void band(struct lval)
+{
+	printf("	and %%rcx, %%rax\n");
+}
+
+void bor(struct lval)
+{
+	printf("	or %%rcx, %%rax\n");
+}
+
+void bxor(struct lval)
+{
+	printf("	xor %%rcx, %%rax\n");
+}
+
+void bshl(struct lval)
+{
+	printf("	shl %%cl, %%rax\n");
+}
+
+void bshr(struct lval)
+{
+	printf("	shr %%cl, %%rax\n");
 }

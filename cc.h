@@ -17,31 +17,62 @@ struct lval;
 #define OPASSOCL (0)
 #define OPASSOCR (1)
 
+/* pointer interaction, driven from the tables themselves */
+#define PTRNONE   0 /* pointer passes through untouched */
+#define NOPTR     1 /* pointer operand is invalid */
+#define GENPTR    2 /* produces a pointer */
+#define DEPTR     3 /* consumes a pointer */
+#define PTRARITH  4 /* pointer arithmetic scales by the pointee size */
+
+/* how an operator assigns to an l-value */
+#define ASNONE 0 /* does not assign */
+#define ASCOMP 1 /* compound assignment, keeps the l-value */
+#define ASTORE 2 /* plain assignment */
+
 /* statement modes passed to stmt() */
 #define STMT   (0)
 #define DECEXP (1)
 
-/* operations */
-#define OPEQ     0
-#define OPNEQ    1
-#define OPLE     2
-#define OPGE     3
-#define OPLT     4
-#define OPGT     5
-#define OPADDEQ  6
-#define OPSUBEQ  7
-#define OPMULEQ  8
-#define OPDIVEQ  9
-#define OPREMEQ  10
-#define OPADD    11
-#define OPSUB    12
-#define OPMUL    13
-#define OPDIV    14
-#define OPREM    15
-#define OPASSIGN 16
-#define OPIDX    17
-#define OPNUM    18
-
+/*
+ * operations.
+ * the table is matched in this very order, so longer strings
+ * always come first: a prefix operator (like '>') must never
+ * shadow a longer one (like '>>=').
+ */
+#define OPSHLEQ  0  /* <<= */
+#define OPSHREQ  1  /* >>= */
+#define OPEQ     2  /* ==  */
+#define OPNEQ    3  /* !=  */
+#define OPLE     4  /* <=  */
+#define OPGE     5  /* >=  */
+#define OPSHL    6  /* <<  */
+#define OPSHR    7  /* >>  */
+#define OPADDEQ  8  /* +=  */
+#define OPSUBEQ  9  /* -=  */
+#define OPMULEQ  10 /* *=  */
+#define OPDIVEQ  11 /* /=  */
+#define OPREMEQ  12 /* %=  */
+#define OPINC    13 /* ++  */
+#define OPDEC    14 /* --  */
+#define OPAND    15 /* &&  */
+#define OPOR     16 /* ||  */
+#define OPBANDEQ 17 /* &=  */
+#define OPBOREQ  18 /* |=  */
+#define OPXOREQ  19 /* ^=  */
+#define OPLT     20 /* <   */
+#define OPGT     21 /* >   */
+#define OPADD    22 /* +   */
+#define OPSUB    23 /* -   */
+#define OPMUL    24 /* *   */
+#define OPDIV    25 /* /   */
+#define OPREM    26 /* %   */
+#define OPASSIGN 27 /* =   */
+#define OPIDX    28 /* [   */
+#define OPBAND   29 /* &   */
+#define OPBOR    30 /* |   */
+#define OPXOR    31 /* ^   */
+#define OPNUM    32
+	
 #define TYSIGNED   (1)
 #define TYUNSIGNED (2)
 #define TYSIGN     (TYSIGNED | TYUNSIGNED)
@@ -97,6 +128,9 @@ struct operator {
 	int         op_precedence;
 
 	int    op_assoc;
+	int    op_ptr;
+	int    op_assign;
+	int    op_postfix;
 	void (*op_emit)(struct lval);
 };
 
@@ -111,6 +145,8 @@ struct unary {
 	int    un_slen;
 	int    un_assoc;
 	int    un_genlval;
+	int    un_ptr;
+	int    un_assign;
 	void (*un_emit)(struct lval);
 };
 
