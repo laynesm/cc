@@ -233,14 +233,20 @@ void expr(int min_prec)
 			if (l.lval_kind == NONE)
 				error("assignment without an l-value.");
 			if (l.lval_kind == REGIS) regispre();
-			expr_ty = l.lval_ty;
-			expr(op->op_precedence);
+
+			if (op->op_assign != ASMOD) {
+				expr_ty = l.lval_ty;
+				expr(op->op_precedence);
+			}
+
 			if (l.lval_kind == REGIS) regispost();
 
-			if (op->op_assign == ASTORE || (!l.lval_ty.sty_isptr && !lval.lval_ty.sty_isptr))
-				tyassign(&l.lval_ty, lval.lval_ty);
+			if (op->op_assign != ASMOD) {
+				if (op->op_assign == ASTORE || (!l.lval_ty.sty_isptr && !lval.lval_ty.sty_isptr))
+					tyassign(&l.lval_ty, lval.lval_ty);
 
-			if (op->op_assign != ASTORE) pointarith(op, &l.lval_ty, &lval.lval_ty, 1);
+				if (op->op_assign != ASTORE) pointarith(op, &l.lval_ty, &lval.lval_ty, 1);
+			}
 
 			op->op_emit(l);
 

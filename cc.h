@@ -28,6 +28,7 @@ struct lval;
 #define ASNONE 0 /* does not assign */
 #define ASCOMP 1 /* compound assignment, keeps the l-value */
 #define ASTORE 2 /* plain assignment */
+#define ASMOD  3 /* modifies in place, takes no operand: postfix ++ -- */
 
 /* statement modes passed to stmt() */
 #define STMT   (0)
