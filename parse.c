@@ -2,6 +2,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <errno.h>
+#include <limits.h>
 
 #include "cc.h"
 #include "emit.h"
@@ -103,9 +105,9 @@ void decl(int size, int sign, int isptr)
 void factor(void)
 {
 	const struct unary *un;
-
+	unsigned long long val;
 	char *end;
-	long  val;
+	int base;
 
 	skipws();
 	/* future note: we will need check for -- and ++ before this */
@@ -159,7 +161,30 @@ void factor(void)
 		return;
 	}
 
-	val = strtol(curs, &end, 10);
+	errno = 0;
+	if (*curs == '0') {
+		base = -1;
+
+		switch (tolower(curs[1])) {
+		case 'x': base = 16; break;
+		case 'd': base = 10; break;
+		case 'b': base = 2; break;
+		case 'o': base = 8; break;
+		default: break;
+		}
+
+		if (base != -1) {
+			if (!isdigit(curs[2])) error("incomplete literal");
+			curs += 2;
+		}
+
+		if (base == -1) base = 8;
+	} else {
+		base = 10;
+	}
+
+	val = strtoull(curs, &end, base);
+	if (errno == ERANGE) error("integer literal exceeds %llu", ULLONG_MAX);
 	if (end == curs) error("expected expression");
 
 	curs = end;

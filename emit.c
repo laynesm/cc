@@ -211,9 +211,9 @@ void neg(struct lval)
 	printf("	neg %%rax\n");
 }
 
-void retval(long val)
+void retval(unsigned long long val)
 {
-	printf("	mov $%ld,%%rax\n", val);
+	printf("	mov $%llu,%%rax\n", val);
 }
 
 void ret(void)

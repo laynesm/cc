@@ -41,7 +41,7 @@ void ge(struct lval);
 void neg(struct lval);
 void lbl(const char *);
 void globl(const char *);
-void retval(long);
+void retval(unsigned long long);
 void ret(void);
 void add(struct lval);
 void sub(struct lval);

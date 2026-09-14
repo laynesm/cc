@@ -17,7 +17,7 @@ static int lblcnt = 0;
  * label (for the increment step in 'for', the condition in
  * while/do-while).
  */
-#define LOOPMAX 64
+#define LOOPMAX 64 
 static int brklbl[LOOPMAX];
 static int cntlbl[LOOPMAX];
 static int looppos = 0;
@@ -29,7 +29,7 @@ static int newlbl(void)
 
 static void looppush(int brk, int cnt)
 {
-	if (looppos == LOOPMAX) error("too many nested loops");
+	if (looppos == LOOPMAX) error("stop programming. you ashame yourself.");
 	brklbl[looppos] = brk;
 	cntlbl[looppos] = cnt;
 	looppos++;

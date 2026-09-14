@@ -75,6 +75,7 @@ const struct keyword *readword(char *buf, size_t len)
 		curs++;
 	size = (size_t)(curs - start);
 
+	if (size >= 1024) error("word is too big");
 	if (size >= len) error("identifier is too big");
 
 	strncpy(buf, start, size);
