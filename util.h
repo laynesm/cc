@@ -3,6 +3,7 @@
 
 #include "cc.h"
 
+struct symty inferty(unsigned long long);
 void warn(char *,...);
 void panic(char *,...);
 void error(char *,...); 

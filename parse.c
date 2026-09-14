@@ -192,7 +192,7 @@ void factor(void)
 
 	retval(val);
 	lval.lval_kind = NONE;
-	lval.lval_ty   = expr_ty.sty_isptr ? defty : expr_ty;
+	lval.lval_ty   = expr_ty.sty_isptr ? defty : inferty(val);
 }
 
 void pointarith(const struct operator *op, struct symty *lhsty, struct symty *rhsty, int iscompound)

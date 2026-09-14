@@ -84,11 +84,11 @@ const struct operator optbl[OPNUM] = {
                       .op_emit       = rem},
 	[OPASSIGN] = {"=", 1, -1, OPASSOCR, store},
 	[OPIDX]    = {"[", 1, 2, OPASSOCL, idx},
-	[OPADDEQ] = {.op_str = "+=", .op_slen = 2, .op_precedence = -1, .op_assoc = OPASSOCR, .op_emit = addeq},
-	[OPSUBEQ] = {.op_str = "-=", .op_slen = 2, .op_precedence = -1, .op_assoc = OPASSOCR, .op_emit = subeq},
-	[OPMULEQ] = {.op_str = "*=", .op_slen = 2, .op_precedence = -1, .op_assoc = OPASSOCR, .op_emit = muleq},
-	[OPDIVEQ] = {.op_str = "/=", .op_slen = 2, .op_precedence = -1, .op_assoc = OPASSOCR, .op_emit = diveq},
-	[OPREMEQ] = {.op_str = "%=", .op_slen = 2, .op_precedence = -1, .op_assoc = OPASSOCR, .op_emit = remeq},
+	[OPADDEQ]  = {.op_str = "+=", .op_slen = 2, .op_precedence = -1, .op_assoc = OPASSOCR, .op_emit = addeq},
+	[OPSUBEQ]  = {.op_str = "-=", .op_slen = 2, .op_precedence = -1, .op_assoc = OPASSOCR, .op_emit = subeq},
+	[OPMULEQ]  = {.op_str = "*=", .op_slen = 2, .op_precedence = -1, .op_assoc = OPASSOCR, .op_emit = muleq},
+	[OPDIVEQ]  = {.op_str = "/=", .op_slen = 2, .op_precedence = -1, .op_assoc = OPASSOCR, .op_emit = diveq},
+	[OPREMEQ]  = {.op_str = "%=", .op_slen = 2, .op_precedence = -1, .op_assoc = OPASSOCR, .op_emit = remeq},
 };
 
 /*
