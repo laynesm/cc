@@ -24,6 +24,7 @@ int main(int argc, char **argv)
 	globl("main");
 	prologue();
 
+	tyinit();
 	prog();
 
 	skipws();

@@ -151,10 +151,39 @@ struct unary {
 	void (*un_emit)(struct lval);
 };
 
+/* runtime type kinds */
+enum tykind {
+	TYSCALR, /* scalar: char/short/int/long */
+	TYPTR,   /* pointer to sty_base */
+	TYARR,   /* array: sty_base is the element, sty_len the count */
+	TYAGG,   /* struct/union, reserved */
+	TYFUNC,  /* function, reserved */
+};
+
+/*
+ * function signatures are only used once TYFUNC comes into play.
+ * field is reserved from the start so the typool layout stays put.
+ */
+struct fnsig {
+	struct symty  *fs_ret;
+	struct symty **fs_args;
+	int            fs_nargs;
+	int            fs_cap;
+};
+
+/*
+ * the runtime type. pointers, arrays and functions live on the
+ * typool as stable slots, so types can reference each other
+ * recursively (struct node { struct node *next; }).
+ */
 struct symty {
-	int sty_signed;
-	int sty_isptr;
-	int sty_size;
+	int          sty_kind;
+	int          sty_size;
+	int          sty_signed;
+	int          sty_align;
+	int          sty_len;
+	struct symty *sty_base;
+	struct fnsig *sty_sig;
 };
 
 /*
@@ -164,10 +193,10 @@ struct symty {
  * I'd constitute a simple of a static string (256byte)
  */
 struct sym {
-	char         sym_name[SYMMAX];
-	int          sym_off;
-	int          sym_scope;
-	struct symty sym_ty;
+	char          sym_name[SYMMAX];
+	int           sym_off;
+	int           sym_scope;
+	struct symty *sym_ty;
 };
 
 /*
@@ -192,7 +221,7 @@ const struct unary *unopundercurs(void);
 const struct operator *opundercurs(void);
 
 struct sym *symlookup(char *, int);
-struct sym *symadd(char *, int, int, int, int);
+struct sym *symadd(char *, int, struct symty *);
 void symdrop(int);
 
 const struct keyword *kwlookup(const char *); 

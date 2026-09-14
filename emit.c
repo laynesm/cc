@@ -15,8 +15,8 @@ static void load_mem(int off, const char *from, int size, int sign)
 		printf("	mov%cwq %d(%s), %%rax\n", sign ? 's' : 'z', off, from);
 		break;
 	case 4:
-		printf("	%s %d(%s), %%rax\n", sign ? "movslq" : "movl",
-		       off, from);
+		printf("	%s %d(%s), %s\n", sign ? "movslq" : "movl",
+		       off, from, sign ? "%rax" : "%eax");
 		break;
 	case 8:
 		printf("	mov %d(%s), %%rax\n", off, from);
@@ -123,14 +123,14 @@ void idx(struct lval l)
 	printf("	add %%rcx, %%rax\n");
 	lval.lval_kind = REGIS;
 
-	if (lval.lval_ty.sty_isptr > 0) lval.lval_ty.sty_isptr--;
+	/* a[i] yields the element behind the pointer */
+	if (lval.lval_ty->sty_kind == TYPTR)
+		lval.lval_ty = lval.lval_ty->sty_base;
 }
 
 void preinc(struct lval l)
 {
-	int sz = 1;
-	if (l.lval_ty.sty_isptr > 0)
-		sz = l.lval_ty.sty_isptr > 1 ? 8 : l.lval_ty.sty_size;
+	int sz = ptrstep(l.lval_ty);
 
 	printf("	add $%d, %%rax\n", sz);
 	store(l);
@@ -138,9 +138,7 @@ void preinc(struct lval l)
 
 void predec(struct lval l)
 {
-	int sz = 1;
-	if (l.lval_ty.sty_isptr > 0)
-		sz = l.lval_ty.sty_isptr > 1 ? 8 : l.lval_ty.sty_size;
+	int sz = ptrstep(l.lval_ty);
 
 	printf("	sub $%d, %%rax\n", sz);
 	store(l);
@@ -148,9 +146,7 @@ void predec(struct lval l)
 
 void inc(struct lval l)
 {
-	int sz = 1;
-	if (l.lval_ty.sty_isptr > 0)
-		sz = l.lval_ty.sty_isptr > 1 ? 8 : l.lval_ty.sty_size;
+	int sz = ptrstep(l.lval_ty);
 
 	printf("	add $%d, %%rax\n", sz);
 	store(l);
@@ -158,9 +154,7 @@ void inc(struct lval l)
 
 void dec(struct lval l)
 {
-	int sz = 1;
-	if (l.lval_ty.sty_isptr > 0)
-		sz = l.lval_ty.sty_isptr > 1 ? 8 : l.lval_ty.sty_size;
+	int sz = ptrstep(l.lval_ty);
 
 	printf("	sub $%d, %%rax\n", sz);
 	store(l);
@@ -176,9 +170,13 @@ void regispost(void)
 	printf("	pop %%rcx\n");
 }
 
+/*
+ * called at the end of expr() when the result sits behind the pointer
+ * in %%rax. at that point lval_ty already is the pointee type.
+ */
 void deptr(struct lval l)
 {
-	load_mem(0, "%rax", l.lval_ty.sty_size, l.lval_ty.sty_signed);
+	load_mem(0, "%rax", l.lval_ty->sty_size, l.lval_ty->sty_signed);
 }
 
 void ptr(struct lval l)
@@ -231,8 +229,8 @@ void epilogue(void)
 
 void load(struct lval l)
 {
-	int size = l.lval_ty.sty_isptr ? 8 : l.lval_ty.sty_size;
-	int sign = l.lval_ty.sty_signed;
+	int size = stysize(l.lval_ty);
+	int sign = l.lval_ty->sty_signed;
 
 	if (l.lval_kind == REGIS) {
 		load_mem(0, "%rax", size, sign);
@@ -244,7 +242,7 @@ void load(struct lval l)
 
 void store(struct lval l)
 {
-	int size = l.lval_ty.sty_isptr ? 8 : l.lval_ty.sty_size;
+	int size = stysize(l.lval_ty);
 
 	if (l.lval_kind == REGIS) {
 		store_mem(0, "%rcx", size);

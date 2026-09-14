@@ -8,9 +8,9 @@
 #define STACK 2
 
 struct lval {
-	int          lval_off;
-	int          lval_kind;
-	struct symty lval_ty;
+	int           lval_off;
+	int           lval_kind;
+	struct symty *lval_ty;
 };
 
 extern struct lval lval;

@@ -14,66 +14,65 @@
 
 struct lval lval;
 
-/*
- * expression results that are not backed by a symbol
- * (numbers, arithmetics, unaries) degrade to this type.
- */
-const struct symty defty = {
-	.sty_signed = 1,
-	.sty_isptr  = 0,
-	.sty_size   = 8,
-};
-
-struct symty expr_ty;
+struct symty *expr_ty;
 
 /*
  * basic assignment type checking.
  * pointers are strict, scalars only warn.
  */
-static void tyassign(struct symty *dst, struct symty src)
+static void tyassign(struct symty *dst, struct symty *src)
 {
-	if (dst->sty_isptr || src.sty_isptr) {
-		if (!src.sty_isptr)
+	if (dst->sty_kind == TYPTR || src->sty_kind == TYPTR) {
+		if (src->sty_kind != TYPTR)
 			error("assignment makes pointer from integer without a "
 			      "cast");
-		if (!dst->sty_isptr)
+		if (dst->sty_kind != TYPTR)
 			error("assignment makes integer from pointer without a "
 			      "cast");
-		if (dst->sty_isptr != src.sty_isptr)
+		if (!tyeq(dst->sty_base, src->sty_base))
 			error("assignment from incompatible pointer type");
 		return;
 	}
 
-	if (dst->sty_signed != src.sty_signed && src.sty_size >= dst->sty_size)
+	if (dst->sty_signed != src->sty_signed && src->sty_size >= dst->sty_size)
 		warn("implicit conversion changes signedness");
 
-	if (src.sty_size > dst->sty_size)
+	if (src->sty_size > dst->sty_size)
 		warn("implicit conversion loses %d bits of precision",
-		     (src.sty_size - dst->sty_size) * 8);
+		     (src->sty_size - dst->sty_size) * 8);
 }
 
-void decl(int size, int sign, int isptr)
+void decl(struct symty *ty)
 {
 	int remaining = 0;
 
 	do {
-		struct sym *s;
-		int curptr = isptr;
-		int isprec = 0;
+		struct sym    *s;
+		struct symty   *curty = ty;
+		int parens = 0;
 
+		/*
+		 * without arrays and function declarators the parentheses
+		 * of a declarator are transparent: 'int *(*a);' is just
+		 * 'int **a;'. count opens, and close them after the name.
+		 */
 		skipws();
-		if (*curs == '(') advcurs(1), isprec = 1;
-
-		while (*curs == '*') {
-			curptr++;
-			advcurs(1);
+		while (*curs == '*' || *curs == '(') {
+			if (*curs == '*') {
+				curty = mkptr(curty);
+				advcurs(1);
+			} else {
+				parens++;
+				advcurs(1);
+			}
 		}
 
-		s = addsym(depth, size, sign, curptr);
+		s = addsym(curty);
 		skipws();
 
-		if (*curs == ')') {
-			if (!isprec) error("unexpected character ')'");
+		while (parens-- > 0) {
+			skipws();
+			if (*curs != ')') error("unbalanced '(' in declarator");
 			advcurs(1);
 		}
 
@@ -83,7 +82,7 @@ void decl(int size, int sign, int isptr)
 			advcurs(1);
 			expr_ty = s->sym_ty;
 			expr(-1);
-			tyassign(&s->sym_ty, lval.lval_ty);
+			tyassign(s->sym_ty, lval.lval_ty);
 		} else {
 			printf("\txor %%rax,%%rax\n");
 		}
@@ -124,12 +123,12 @@ void factor(void)
 				      un->un_str);
 
 			if (un->un_ptr == DEPTR) {
-				if (l.lval_ty.sty_isptr == 0)
+				if (l.lval_ty->sty_kind != TYPTR)
 					error("cannot dereference non-pointer");
-				l.lval_ty.sty_isptr--;
+				l.lval_ty = l.lval_ty->sty_base;
 			}
 
-			if (un->un_ptr == GENPTR) l.lval_ty.sty_isptr++;
+			if (un->un_ptr == GENPTR) l.lval_ty = mkptr(l.lval_ty);
 
 			lval.lval_kind = un->un_genlval;
 			lval.lval_off  = NONE;
@@ -192,17 +191,17 @@ void factor(void)
 
 	retval(val);
 	lval.lval_kind = NONE;
-	lval.lval_ty   = expr_ty.sty_isptr ? defty : inferty(val);
+	lval.lval_ty   = expr_ty->sty_kind == TYPTR ? defty : inferty(val);
 }
 
 void pointarith(const struct operator *op, struct symty *lhsty, struct symty *rhsty, int iscompound)
 {
-	int islhsptr = lhsty->sty_isptr;
-	int isrhsptr = rhsty->sty_isptr;
+	int islhsptr = lhsty->sty_kind == TYPTR;
+	int isrhsptr = rhsty->sty_kind == TYPTR;
 
 	struct symty *ptrty = islhsptr ? lhsty : rhsty;
 	const char   *reg   = islhsptr && !iscompound ? "%rcx" : "%rax";
-	int           sz    = ptrty->sty_isptr > 1 ? 8 : ptrty->sty_size;
+	int           sz    = ptrstep(ptrty);
 
 	if (islhsptr && isrhsptr) error("both operands are pointers");
 	if (!islhsptr && !isrhsptr) return;
@@ -217,13 +216,13 @@ void pointarith(const struct operator *op, struct symty *lhsty, struct symty *rh
 
 void expr(int min_prec)
 {
-	struct symty saved = expr_ty;
+	struct symty *saved = expr_ty;
 
 	factor();
 
 	for (;;) {
 		const struct operator *op = opundercurs();
-		struct symty           lhs_ty;
+		struct symty           *lhs_ty;
 
 		if (!op || op->op_precedence < min_prec) break;
 		advcurs(op->op_slen);
@@ -242,10 +241,10 @@ void expr(int min_prec)
 			if (l.lval_kind == REGIS) regispost();
 
 			if (op->op_assign != ASMOD) {
-				if (op->op_assign == ASTORE || (!l.lval_ty.sty_isptr && !lval.lval_ty.sty_isptr))
-					tyassign(&l.lval_ty, lval.lval_ty);
+				if (op->op_assign == ASTORE || (l.lval_ty->sty_kind != TYPTR && lval.lval_ty->sty_kind != TYPTR))
+					tyassign(l.lval_ty, lval.lval_ty);
 
-				if (op->op_assign != ASTORE) pointarith(op, &l.lval_ty, &lval.lval_ty, 1);
+				if (op->op_assign != ASTORE) pointarith(op, l.lval_ty, lval.lval_ty, 1);
 			}
 
 			op->op_emit(l);
@@ -269,7 +268,7 @@ void expr(int min_prec)
 		printf("	xchg %%rax, %%rcx\n");
 
 		if (op->op_ptr == PTRARITH || op->op_ptr == NOPTR)
-			pointarith(op, &lhs_ty, &lval.lval_ty, 0);
+			pointarith(op, lhs_ty, lval.lval_ty, 0);
 
 		lval.lval_ty = lhs_ty;
 		op->op_emit(lval);

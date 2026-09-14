@@ -144,9 +144,10 @@ struct sym *symlookup(char *name, int scope)
 	return NULL;
 }
 
-struct sym *symadd(char *name, int scope, int size, int sign, int isptr)
+struct sym *symadd(char *name, int scope, struct symty *ty)
 {
 	struct sym *s;
+	int         size = stysize(ty);
 
 	/*
 	 * shouldn't ever happen
@@ -170,15 +171,13 @@ struct sym *symadd(char *name, int scope, int size, int sign, int isptr)
 	 * a pointer should be sized on eight bytes always.
 	 * and the adresses should be aligned
 	 */
-	symtab.tab_stackoff -= isptr ? 8 : size;
+	symtab.tab_stackoff -= size;
 	s->sym_off = symtab.tab_stackoff;
 
-	if (isptr || size > 1) symtab.tab_stackoff &= ~((isptr ? 8 : size) - 1);
+	if (size > 1) symtab.tab_stackoff &= ~(size - 1);
 
-	s->sym_scope         = scope;
-	s->sym_ty.sty_size   = size;
-	s->sym_ty.sty_signed = sign;
-	s->sym_ty.sty_isptr  = isptr;
+	s->sym_scope = scope;
+	s->sym_ty    = ty;
 	return s;
 }
 

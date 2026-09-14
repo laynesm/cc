@@ -80,7 +80,7 @@ void doty(struct keyword *basety)
 {
 	char buf[KWMAX];
 
-	int   bits, longs, prio, size, sign, t, isptr;
+	int   bits, longs, prio, size, sign, t;
 	char *savcurs = curs;
 
 	/* doty operates on the scope-depth */
@@ -144,19 +144,19 @@ void doty(struct keyword *basety)
 	else if (bits & TYUNSIGNED)
 		sign = tytbl[TYUNSIGNED].ty_signed;
 
-	isptr = 0;
-
 	skipws();
 	savcurs = curs;
-	if (*curs == '(') advcurs(1);
-	while (*curs == '*') {
-		isptr++;
-		advcurs(1);
-	}
 
-	if (savcurs == NULL || isalpha(*curs) || *curs == '_' || *curs == '$') {
-		if (savcurs) curs = savcurs;
-		decl(size, sign, 0);
+	/*
+	 * a declaration may hide behind pointers and parenthesized
+	 * declarators (int *p, int *(a), int (*fp)()):
+	 * peek past them for the name, then let decl() scan again.
+	 */
+	while (*curs == '(' || *curs == '*') advcurs(1);
+
+	if (isalpha(*curs) || *curs == '_' || *curs == '$') {
+		curs = savcurs;
+		decl(sclty(size, sign));
 	} else {
 		warn("cast not yet implemented");
 	}

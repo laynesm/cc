@@ -7,17 +7,17 @@
 #include "ident.h"
 #include "util.h"
 
-struct sym *addsym(int lookupdepth, int size, int sign, int isptr)
+struct sym *addsym(struct symty *ty)
 {
 	char name[SYMMAX];
 
 	readident(name, sizeof(name));
 	skipws();
 
-	if (symlookup(name, lookupdepth))
+	if (symlookup(name, depth))
 		error("'%s' symbol already declared", name);
 
-	return symadd(name, depth, size, sign, isptr);
+	return symadd(name, depth, ty);
 }
 
 struct sym *readsym(int lookupdepth)

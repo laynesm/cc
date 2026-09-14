@@ -3,10 +3,25 @@
 
 #include "cc.h"
 
-struct symty inferty(unsigned long long);
+struct symty *sclty(int, int);
+struct symty *mkptr(struct symty *);
+struct symty *mkarray(struct symty *, int);
+struct symty *inferty(unsigned long long);
+
+void tyinit(void);
+
+/* width in bytes of a value of this type (pointers are 8)     */
+int stysize(struct symty *);
+
+/* how many bytes ++/-- advance for a symbol of this type      */
+int ptrstep(struct symty *);
+
+/* structural equality, since each use allocates a new slot     */
+int tyeq(struct symty *, struct symty *);
+
 void warn(char *,...);
 void panic(char *,...);
-void error(char *,...); 
+void error(char *,...);
 void skipws(void);
 void advcurs(int);
 
