@@ -2,11 +2,7 @@
 		               TODOIST DO PROJETO 
 ===================================================================================
 
-- Ser capaz de identificar tipagem de literais e overflow/underflow básico.
-	E.g: -10 ser assinado e não atribuível a uma variável não-assinada,
-	ou 384 não ser atributível a um char, 1285679 não ser atribuível a um short.
-	Checagem além desse básico que nós temos.
-
+- Constant folding 
 - Implementar o switch
 
 ===================================================================================
