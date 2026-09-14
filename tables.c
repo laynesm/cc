@@ -84,6 +84,11 @@ const struct operator optbl[OPNUM] = {
                       .op_emit       = rem},
 	[OPASSIGN] = {"=", 1, -1, OPASSOCR, store},
 	[OPIDX]    = {"[", 1, 2, OPASSOCL, idx},
+	[OPADDEQ] = {.op_str = "+=", .op_slen = 2, .op_precedence = -1, .op_assoc = OPASSOCR, .op_emit = addeq},
+	[OPSUBEQ] = {.op_str = "-=", .op_slen = 2, .op_precedence = -1, .op_assoc = OPASSOCR, .op_emit = subeq},
+	[OPMULEQ] = {.op_str = "*=", .op_slen = 2, .op_precedence = -1, .op_assoc = OPASSOCR, .op_emit = muleq},
+	[OPDIVEQ] = {.op_str = "/=", .op_slen = 2, .op_precedence = -1, .op_assoc = OPASSOCR, .op_emit = diveq},
+	[OPREMEQ] = {.op_str = "%=", .op_slen = 2, .op_precedence = -1, .op_assoc = OPASSOCR, .op_emit = remeq},
 };
 
 /*
@@ -91,10 +96,14 @@ const struct operator optbl[OPNUM] = {
  * They should have association type too.
  */
 const struct unary untbl[] = {
-	{'+', OPASSOCL, NONE, pos},  {'-', OPASSOCL, NONE, neg},
-	{'~', OPASSOCL, NONE, bnot}, {'!', OPASSOCL, NONE, lnot},
-	{'*', OPASSOCR, REGIS, pos}, /* ignored we lead with it using REGIS */
-	{'&', OPASSOCR, NONE, ptr},
+	{"++", 2, OPASSOCR, STACK, preinc}, /* before '+' */
+	{"--", 2, OPASSOCR, STACK, predec},
+	{"+",  1, OPASSOCL, NONE,  pos},
+	{"-",  1, OPASSOCL, NONE,  neg},
+	{"~",  1, OPASSOCL, NONE,  bnot},
+	{"!",  1, OPASSOCL, NONE,  lnot},
+	{"*",  1, OPASSOCR, REGIS, pos}, /* ignored we lead with it using REGIS */
+	{"&",  1, OPASSOCR, NONE,  ptr},
 };
 
 /*
@@ -136,7 +145,7 @@ const struct operator *opundercurs(void)
 const struct unary *unopundercurs(void)
 {
 	for (size_t i = 0; i < countof(untbl); ++i) {
-		if (untbl[i].un_ch != *curs) continue;
+		if (strncmp(untbl[i].un_str, curs, untbl[i].un_slen) != 0) continue;
 		return &untbl[i];
 	}
 

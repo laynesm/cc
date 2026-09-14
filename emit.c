@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <string.h>
 
 #include "emit.h"
 #include "parse.h"
@@ -45,6 +46,41 @@ static void store_mem(int off, const char *to, int size)
 	}
 }
 
+static void someq(struct lval l, const char *inst, const char *outreg)
+{
+	printf("	push %%rax\n");
+	load(l);
+	printf("	pop %%rcx\n");
+	printf("	%s %%rcx,%%rax\n", inst);
+	if (strcmp(outreg, "rax") != 0) printf("	mov %%%s,%%rax", outreg);
+	store(l);
+}
+
+void addeq(struct lval l)
+{
+	someq(l, "add", "rax");
+}
+
+void subeq(struct lval l)
+{
+	someq(l, "sub", "rax");
+}
+
+void muleq(struct lval l)
+{
+	someq(l, "imul", "rax");
+}
+
+void diveq(struct lval l)
+{
+	someq(l, "idiv", "rax");
+}
+
+void remeq(struct lval l)
+{
+	someq(l, "idiv", "rdx");
+}
+
 void idx(struct lval l)
 {
 	skipws();
@@ -55,6 +91,26 @@ void idx(struct lval l)
 	lval.lval_kind = REGIS;
 
 	if (lval.lval_ty.sty_isptr > 0) lval.lval_ty.sty_isptr--;
+}
+
+void preinc(struct lval l)
+{
+	int sz = 1;
+	if (l.lval_ty.sty_isptr > 0)
+		sz = l.lval_ty.sty_isptr > 1 ? 8 : l.lval_ty.sty_size;
+
+	printf("	add $%d, %%rax\n", sz);
+	store(l);
+}
+
+void predec(struct lval l)
+{
+	int sz = 1;
+	if (l.lval_ty.sty_isptr > 0)
+		sz = l.lval_ty.sty_isptr > 1 ? 8 : l.lval_ty.sty_size;
+
+	printf("	sub $%d, %%rax", sz);
+	store(l);
 }
 
 void regispre(void)

@@ -113,23 +113,23 @@ void factor(void)
 	/* future note: we will need check for -- and ++ before this */
 	un = unopundercurs();
 	if (un) {
-		advcurs(1);
+		advcurs(un->un_slen);
 		factor();
 
 		if (un->un_assoc == OPASSOCR) {
 			struct lval l = lval;
 
 			if (l.lval_off == NONE)
-				error("l-value required for unary '%c' operand",
-				      un->un_ch);
+				error("l-value required for unary '%s' operand",
+				      un->un_str);
 
-			if (un->un_ch == '*') {
+			if (un->un_emit == pos && *un->un_str == '*') {
 				if (l.lval_ty.sty_isptr == 0)
 					error("cannot dereference non-pointer");
 				l.lval_ty.sty_isptr--;
 			}
 
-			if (un->un_ch == '&') l.lval_ty.sty_isptr++;
+			if (un->un_emit == ptr) l.lval_ty.sty_isptr++;
 
 			lval.lval_kind = un->un_genlval;
 			lval.lval_off  = NONE;
@@ -195,6 +195,26 @@ void factor(void)
 	lval.lval_ty   = expr_ty.sty_isptr ? defty : expr_ty;
 }
 
+void pointarith(const struct operator *op, struct symty *lhsty, struct symty *rhsty, int iscompound)
+{
+	int islhsptr = lhsty->sty_isptr;
+	int isrhsptr = rhsty->sty_isptr;
+
+	struct symty *ptrty = islhsptr ? lhsty : rhsty;
+	const char   *reg   = islhsptr && !iscompound ? "%rcx" : "%rax";
+	int           sz    = ptrty->sty_isptr > 1 ? 8 : ptrty->sty_size;
+
+	if (islhsptr && isrhsptr) error("both operands are pointers");
+	if (!islhsptr && !isrhsptr) return;
+	if (iscompound && isrhsptr && !islhsptr) error("assignment makes integer from pointer without a cast");
+
+	if (op->op_emit == mul || op->op_emit == idiv || op->op_emit == rem || op->op_emit == muleq || op->op_emit == diveq || op->op_emit == remeq)
+		error("invalid pointer operation");
+
+	if (isrhsptr) *lhsty = *rhsty;
+	if (sz > 1) printf("	imul $%d, %s\n", sz, reg);
+}
+
 void expr(int min_prec)
 {
 	struct symty saved = expr_ty;
@@ -217,7 +237,10 @@ void expr(int min_prec)
 			expr(op->op_precedence);
 			if (l.lval_kind == REGIS) regispost();
 
-			tyassign(&l.lval_ty, lval.lval_ty);
+			if (op->op_emit == store || (!l.lval_ty.sty_isptr && !lval.lval_ty.sty_isptr))
+				tyassign(&l.lval_ty, lval.lval_ty);
+
+			if (op->op_emit != store) pointarith(op, &l.lval_ty, &lval.lval_ty, 1);
 
 			op->op_emit(l);
 
@@ -239,24 +262,8 @@ void expr(int min_prec)
 
 		printf("	xchg %%rax, %%rcx\n");
 
-		if (op->op_emit == add || op->op_emit == sub || op->op_emit == idx) {
-			int islhsptr = lhs_ty.sty_isptr;
-			int isrhsptr = lval.lval_ty.sty_isptr;
-
-			if (islhsptr && isrhsptr) error("both operands are pointers");
-
-			if (islhsptr || isrhsptr) {
-				struct symty *ptr_ty = islhsptr ? &lhs_ty : &lval.lval_ty;
-				const char   *reg    = islhsptr ? "%rcx" : "%rax";
-				int           sz     = ptr_ty->sty_isptr > 1 ? 8 : ptr_ty->sty_size;
-
-				if (isrhsptr) lhs_ty = lval.lval_ty;
-				if (sz > 1) printf("	imul $%d, %s\n", sz, reg);
-			}
-		}
-
-		if ((op->op_emit == mul || op->op_emit == idiv || op->op_emit == rem) && (lhs_ty.sty_isptr > 0 || lval.lval_ty.sty_isptr > 0))
-			error("invalid pointer operation");
+		if (op->op_emit == add || op->op_emit == sub || op->op_emit == idx || op->op_emit == mul || op->op_emit == idiv || op->op_emit == rem)
+			pointarith(op, &lhs_ty, &lval.lval_ty, 0);
 
 		lval.lval_ty = lhs_ty;
 		op->op_emit(lval);

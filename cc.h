@@ -28,14 +28,19 @@ struct lval;
 #define OPGE     3
 #define OPLT     4
 #define OPGT     5
-#define OPADD    6 
-#define OPSUB    7
-#define OPMUL    8
-#define OPDIV    9
-#define OPREM    10
-#define OPASSIGN 11
-#define OPIDX    12
-#define OPNUM    13
+#define OPADDEQ  6
+#define OPSUBEQ  7
+#define OPMULEQ  8
+#define OPDIVEQ  9
+#define OPREMEQ  10
+#define OPADD    11
+#define OPSUB    12
+#define OPMUL    13
+#define OPDIV    14
+#define OPREM    15
+#define OPASSIGN 16
+#define OPIDX    17
+#define OPNUM    18
 
 #define TYSIGNED   (1)
 #define TYUNSIGNED (2)
@@ -102,7 +107,8 @@ struct keyword {
 };
 
 struct unary {
-	char   un_ch;
+	char  *un_str;
+	int    un_slen;
 	int    un_assoc;
 	int    un_genlval;
 	void (*un_emit)(struct lval);

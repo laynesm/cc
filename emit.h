@@ -21,6 +21,15 @@ void regispost(void);
 void deptr(struct lval);
 void ptr(struct lval);
 
+void preinc(struct lval);
+void predec(struct lval);
+
+void addeq(struct lval);
+void subeq(struct lval);
+void muleq(struct lval);
+void diveq(struct lval);
+void remeq(struct lval);
+
 void idx(struct lval);
 void cmp(long);
 void jmplbl(int);
