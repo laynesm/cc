@@ -106,7 +106,7 @@ struct symty *parsety(int first)
 		id = kw->kw_id;
 
 		/* the type table decides who relates to whom */
-		for (t = TYSIGNED; t <= TYLONG; t <<= 1) {
+		for (t = TYSIGNED; t <= TYVOID; t <<= 1) {
 			if ((bits & t) == 0 || (tytbl[t].ty_relate & id) != 0)
 				continue;
 			error("type '%s' does not relate to '%s'",
@@ -126,7 +126,7 @@ struct symty *parsety(int first)
 	/* the winning type decides the size, the sign lives in the same data */
 	prio = -1;
 	size = 0;
-	for (t = TYSIGNED; t <= TYLONG; t <<= 1) {
+	for (t = TYSIGNED; t <= TYVOID; t <<= 1) {
 		if ((bits & t) == 0 || tytbl[t].ty_prio <= prio) continue;
 		prio = tytbl[t].ty_prio;
 		size = tytbl[t].ty_size;
@@ -338,7 +338,7 @@ void dodowhile(struct keyword *)
 	looppop();
 }
 
-void doelse(void)
+void doelse(struct keyword *)
 {
 	error("orphan else");
 }

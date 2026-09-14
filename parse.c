@@ -29,6 +29,14 @@ static void tyassign(struct symty *dst, struct symty *src)
 		if (dst->sty_kind != TYPTR)
 			error("assignment makes integer from pointer without a "
 			      "cast");
+
+		/*
+		 * a void* is the generic pointer: it freely converts to and
+		 * from any other pointer type.
+		 */
+		if (dst->sty_base->sty_size == 0 || src->sty_base->sty_size == 0)
+			return;
+
 		if (!tyeq(dst->sty_base, src->sty_base))
 			error("assignment from incompatible pointer type");
 		return;
@@ -68,6 +76,14 @@ void decl(struct symty *ty)
 		}
 
 		s = addsym(curty);
+
+		/*
+		 * a zero-sized type is the void type: it may only show up
+		 * behind a pointer ('void *'), never as a standalone object.
+		 */
+		if (stysize(curty) == 0)
+			error("variable '%s' cannot be void", s->sym_name);
+
 		skipws();
 
 		while (parens-- > 0) {

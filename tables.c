@@ -28,6 +28,7 @@ const struct keyword kwtbl[] = {
 	[TYLONG]     = {"long", TYLONG, doty},
 	[TYSHORT]    = {"short", TYSHORT, doty},
 	[TYCHAR]     = {"char", TYCHAR, doty},
+	[TYVOID]     = {"void", TYVOID, doty},
 	[BREAK]      = {"break", BREAK, dobreak},
 	[CONTINUE]   = {"continue", CONTINUE, docontinue},
 	[GOTO]       = {"goto", GOTO, dogoto},
@@ -97,6 +98,7 @@ const struct type tytbl[] = {
 	[TYSHORT] = {2, 1, 3, TYINT | TYSIGN},
 	[TYINT]   = {4, 1, 1, TYSIGN | TYLONG | TYSHORT},
 	[TYLONG]  = {8, 1, 3, TYINT | TYSIGN | TYLONG},
+	[TYVOID]  = {0, 0, 2, 0},
 
 	[TYUNSIGNED] = {4, 0, 0, TYCHAR | TYINT | TYLONG | TYSHORT},
 	[TYSIGNED]   = {4, 1, 0, TYCHAR | TYINT | TYLONG | TYSHORT},

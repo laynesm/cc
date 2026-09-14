@@ -176,6 +176,8 @@ void regispost(void)
  */
 void deptr(struct lval l)
 {
+	if (l.lval_ty->sty_size == 0)
+		error("cannot dereference a void pointer");
 	load_mem(0, "%rax", l.lval_ty->sty_size, l.lval_ty->sty_signed);
 }
 

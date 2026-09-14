@@ -81,6 +81,7 @@ struct lval;
 #define TYSHORT    (8)
 #define TYINT      (16)
 #define TYLONG     (32)
+#define TYVOID     (64)
 
 /* keywords, always use non-bit perfect numbers */
 #define RETURN   0
