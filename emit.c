@@ -126,6 +126,13 @@ void idx(struct lval l)
 	/* a[i] yields the element behind the pointer */
 	if (lval.lval_ty->sty_kind == TYPTR)
 		lval.lval_ty = lval.lval_ty->sty_base;
+
+	/*
+	 * an array element still decays too: m[i] is an inner array,
+	 * and using it re-indexes through a pointer to its first element.
+	 */
+	if (lval.lval_ty->sty_kind == TYARR)
+		lval.lval_ty = mkptr(lval.lval_ty->sty_base);
 }
 
 void preinc(struct lval l)
@@ -220,7 +227,7 @@ void prologue(void)
 {
 	printf("	push %%rbp\n");
 	printf("	mov %%rsp, %%rbp\n");
-	printf("	sub $256, %%rsp\n");
+	printf("	sub $%d, %%rsp\n", FRAMESZ);
 }
 
 void epilogue(void)

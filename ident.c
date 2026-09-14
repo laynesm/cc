@@ -7,19 +7,6 @@
 #include "ident.h"
 #include "util.h"
 
-struct sym *addsym(struct symty *ty)
-{
-	char name[SYMMAX];
-
-	readident(name, sizeof(name));
-	skipws();
-
-	if (symlookup(name, depth))
-		error("'%s' symbol already declared", name);
-
-	return symadd(name, depth, ty);
-}
-
 struct sym *readsym(int lookupdepth)
 {
 	char       *savcurs = curs;

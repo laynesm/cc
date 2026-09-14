@@ -16,6 +16,9 @@ struct lval lval;
 
 struct symty *expr_ty;
 
+/* a dereference deferred because a postfix operator binds first */
+static int derefpend;
+
 /*
  * basic assignment type checking.
  * pointers are strict, scalars only warn.
@@ -55,14 +58,17 @@ void decl(struct symty *ty)
 	int remaining = 0;
 
 	do {
-		struct sym    *s;
+		struct sym     *s;
 		struct symty   *curty = ty;
-		int parens = 0;
+		char            name[SYMMAX];
+		int             dims[16];
+		int             ndims = 0;
+		int             parens = 0;
 
 		/*
-		 * without arrays and function declarators the parentheses
-		 * of a declarator are transparent: 'int *(*a);' is just
-		 * 'int **a;'. count opens, and close them after the name.
+		 * without function declarators the parentheses of a declarator
+		 * are transparent: 'int *(*a);' is just 'int **a;'.
+		 * count opens, and close them after the array brackets.
 		 */
 		skipws();
 		while (*curs == '*' || *curs == '(') {
@@ -75,7 +81,39 @@ void decl(struct symty *ty)
 			}
 		}
 
-		s = addsym(curty);
+		readident(name, sizeof(name));
+
+		/*
+		 * 'int a[2][3]' declares an array of 2 arrays of 3 ints.
+		 * the bracket next to the name is the outer one, so the
+		 * dimensions wrap the base type from the innermost back.
+		 */
+		for (;;) {
+			char              *end;
+			unsigned long long len;
+
+			skipws();
+			if (*curs != '[') break;
+
+			advcurs(1);
+			errno = 0;
+			len   = strtoull(curs, &end, 0);
+			if (errno || end == curs || len == 0)
+				error("invalid array length");
+			curs = end;
+			if (ndims == countof(dims))
+				error("too many array dimensions");
+			dims[ndims++] = (int)len;
+
+			skipws();
+			if (*curs != ']') error("expected ']'");
+			advcurs(1);
+		}
+
+		for (int i = ndims - 1; i >= 0; --i)
+			curty = mkarray(curty, dims[i]);
+
+		s = symadd(name, depth, curty);
 
 		/*
 		 * a zero-sized type is the void type: it may only show up
@@ -95,18 +133,35 @@ void decl(struct symty *ty)
 		remaining = 0;
 
 		if (*curs == '=') {
+			if (curty->sty_kind == TYARR)
+				error("array initializer not yet supported");
 			advcurs(1);
 			expr_ty = s->sym_ty;
 			expr(-1);
 			tyassign(s->sym_ty, lval.lval_ty);
+		} else if (curty->sty_kind == TYARR) {
+			/*
+			 * a default array has no single element to store:
+			 * zero out the whole reserved region in one go.
+			 */
+			printf("\tlea %d(%%rbp), %%rdi\n", s->sym_off);
+			printf("\txor %%eax, %%eax\n");
+			printf("\tmov $%d, %%rcx\n", stysize(curty));
+			printf("\trep stosb\n");
 		} else {
 			printf("\txor %%rax,%%rax\n");
 		}
 
-		lval.lval_off  = s->sym_off;
-		lval.lval_kind = STACK;
-		lval.lval_ty   = s->sym_ty;
-		store(lval);
+		/*
+		 * an array has no single value to store: it only reserves
+		 * its stack space.
+		 */
+		if (curty->sty_kind != TYARR) {
+			lval.lval_off  = s->sym_off;
+			lval.lval_kind = STACK;
+			lval.lval_ty   = s->sym_ty;
+			store(lval);
+		}
 
 		if (*curs == ',') {
 			advcurs(1);
@@ -134,14 +189,35 @@ void factor(void)
 		if (un->un_assoc == OPASSOCR) {
 			struct lval l = lval;
 
-			if (l.lval_off == NONE)
-				error("l-value required for unary '%s' operand",
-				      un->un_str);
-
 			if (un->un_ptr == DEPTR) {
 				if (l.lval_ty->sty_kind != TYPTR)
 					error("cannot dereference non-pointer");
+
+				/*
+				 * '[' binds tighter than '*': '*ap[1]' is
+				 * '*(ap[1])'. if a postfix operator sits right
+				 * behind the operand, resolve it first and
+				 * dereference its result instead.
+				 */
+				if (opundercurs() && opundercurs()->op_postfix) {
+					derefpend = 1;
+					return;
+				}
+
+				/*
+				 * a register l-value still holds the address of
+				 * its own object: read the object so the pending
+				 * dereference has a pointer to work on.
+				 */
+				if (l.lval_kind == REGIS) {
+					load(l);
+					l.lval_kind = NONE;
+				}
+
 				l.lval_ty = l.lval_ty->sty_base;
+			} else if (l.lval_off == NONE) {
+				error("l-value required for unary '%s' operand",
+				      un->un_str);
 			}
 
 			if (un->un_ptr == GENPTR) l.lval_ty = mkptr(l.lval_ty);
@@ -207,6 +283,19 @@ void factor(void)
 
 	if (isalpha(*curs)) {
 		struct sym *s  = readsym(-1);
+
+		/*
+		 * outside an initializer an array has no value: using its
+		 * name decays it to a pointer to its first element.
+		 */
+		if (s->sym_ty->sty_kind == TYARR) {
+			printf("	lea %d(%%rbp), %%rax\n", s->sym_off);
+			lval.lval_kind = NONE;
+			lval.lval_off  = s->sym_off;
+			lval.lval_ty   = mkptr(s->sym_ty->sty_base);
+			return;
+		}
+
 		lval.lval_kind = STACK;
 		lval.lval_off  = s->sym_off;
 		lval.lval_ty   = s->sym_ty;
@@ -268,9 +357,29 @@ void pointarith(const struct operator *op, struct symty *lhsty, struct symty *rh
 	if (sz > 1) printf("	imul $%d, %s\n", sz, reg);
 }
 
+/*
+ * completes a deferred dereference: '*ap[1]' waits for the postfix
+ * chain, reads the pointer stored in the indexed object and switches
+ * to the pointed-to type.
+ */
+static void derefvalue(struct lval *lv)
+{
+	if (!derefpend)
+		return;
+
+	if (lv->lval_ty->sty_kind != TYPTR)
+		error("cannot dereference non-pointer");
+	load(*lv);
+	lv->lval_ty = lv->lval_ty->sty_base;
+	derefpend = 0;
+}
+
 void expr(int min_prec)
 {
 	struct symty *saved = expr_ty;
+	int           savedep = derefpend;
+
+	derefpend = 0;
 
 	factor();
 
@@ -285,6 +394,7 @@ void expr(int min_prec)
 			struct lval l = lval;
 			if (l.lval_kind == NONE)
 				error("assignment without an l-value.");
+			derefvalue(&l);
 			if (l.lval_kind == REGIS) regispre();
 
 			if (op->op_assign != ASMOD) {
@@ -309,6 +419,16 @@ void expr(int min_prec)
 		}
 
 		/*
+		 * a register l-value is a pending dereference: the postfix
+		 * '[' keeps the address, anything that follows needs the value.
+		 */
+		if (lval.lval_kind == REGIS && !op->op_postfix) {
+			derefvalue(&lval);
+			deptr(lval);
+			lval.lval_kind = NONE;
+		}
+
+		/*
 		 * If it is left-associated, overwrite the l-value.
 		 */
 		lhs_ty         = lval.lval_ty;
@@ -329,10 +449,12 @@ void expr(int min_prec)
 	}
 
 	if (lval.lval_kind == REGIS) {
+		derefvalue(&lval);
 		deptr(lval);
 		lval.lval_kind = NONE;
 	}
 
+	derefpend = savedep;
 	expr_ty = saved;
 }
 

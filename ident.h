@@ -1,8 +1,6 @@
 #ifndef IDENT_H
 #define IDENT_H
 
-struct sym *addsym(struct symty *);
-
 /*
  * reads a valid declared symbol
  */

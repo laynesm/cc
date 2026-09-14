@@ -13,6 +13,9 @@ struct lval;
 #define SYMMAX    (256)
 #define SYMTABMAX (256)
 
+/* fixed stack frame for the locals of the single main frame */
+#define FRAMESZ (8192)
+
 /* association */
 #define OPASSOCL (0)
 #define OPASSOCR (1)
