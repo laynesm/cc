@@ -135,6 +135,7 @@ void doty(struct keyword *basety)
 
 	skipws();
 	savcurs = curs;
+	if (*curs == '(') advcurs(1);
 	while (*curs == '*') {
 		isptr++;
 		advcurs(1);

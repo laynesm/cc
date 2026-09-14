@@ -57,8 +57,11 @@ void decl(int size, int sign, int isptr)
 	do {
 		struct sym *s;
 		int curptr = isptr;
+		int isprec = 0;
 
 		skipws();
+		if (*curs == '(') advcurs(1), isprec = 1;
+
 		while (*curs == '*') {
 			curptr++;
 			advcurs(1);
@@ -66,6 +69,11 @@ void decl(int size, int sign, int isptr)
 
 		s = addsym(depth, size, sign, curptr);
 		skipws();
+
+		if (*curs == ')') {
+			if (!isprec) error("unexpected character ')'");
+			advcurs(1);
+		}
 
 		remaining = 0;
 
