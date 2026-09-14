@@ -87,10 +87,6 @@ void doty(struct keyword *basety)
 		savcurs = curs;
 		kw      = readword(buf, sizeof(buf));
 		if (!kw) {
-			/*
-			 * we would like to read the identifier here to you
-			 * know, do a variable declaration.
-			 */
 			curs    = savcurs;
 			savcurs = NULL;
 			break;
@@ -138,13 +134,15 @@ void doty(struct keyword *basety)
 	isptr = 0;
 
 	skipws();
+	savcurs = curs;
 	while (*curs == '*') {
 		isptr++;
 		advcurs(1);
 	}
 
-	if (savcurs == NULL || isptr) {
-		decl(size, sign, isptr);
+	if (savcurs == NULL || isalpha(*curs) || *curs == '_' || *curs == '$') {
+		if (savcurs) curs = savcurs;
+		decl(size, sign, 0);
 	} else {
 		warn("cast not yet implemented");
 	}

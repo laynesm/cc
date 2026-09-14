@@ -55,7 +55,16 @@ void decl(int size, int sign, int isptr)
 	int remaining = 0;
 
 	do {
-		struct sym *s = addsym(depth, size, sign, isptr);
+		struct sym *s;
+		int curptr = isptr;
+
+		skipws();
+		while (*curs == '*') {
+			curptr++;
+			advcurs(1);
+		}
+
+		s = addsym(depth, size, sign, curptr);
 		skipws();
 
 		remaining = 0;
