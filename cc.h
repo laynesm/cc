@@ -13,9 +13,6 @@ struct lval;
 #define SYMMAX    (256)
 #define SYMTABMAX (256)
 
-/* fixed stack frame for the locals of the single main frame */
-#define FRAMESZ (8192)
-
 /* association */
 #define OPASSOCL (0)
 #define OPASSOCR (1)
@@ -226,6 +223,7 @@ const struct operator *opundercurs(void);
 
 struct sym *symlookup(char *, int);
 struct sym *symadd(char *, int, struct symty *);
+int framesize(void);
 void symdrop(int);
 
 const struct keyword *kwlookup(const char *); 

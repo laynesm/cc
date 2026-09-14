@@ -146,6 +146,11 @@ struct sym *symlookup(char *name, int scope)
 	return NULL;
 }
 
+int framesize(void)
+{
+	return -symtab.tab_stackoff;
+}
+
 struct sym *symadd(char *name, int scope, struct symty *ty)
 {
 	struct sym *s;

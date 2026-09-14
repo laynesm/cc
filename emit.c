@@ -223,11 +223,25 @@ void jmp(char *label)
 	printf("	jmp %s\n", label);
 }
 
-void prologue(void)
+void beginframe(int setup, int body)
 {
+	/*
+	 * the stack frame can only be sized after every declaration has
+	 * been parsed, so the prologue runs from the end of the function:
+	 * jump to a setup block, leave a body label behind, and let the
+	 * setup (emitted by endframe) jump back once the frame is known.
+	 */
+	printf("	jmp .L%d\n", setup);
+	printf(".L%d:\n", body);
+}
+
+void endframe(int setup, int body, int size)
+{
+	printf(".L%d:\n", setup);
 	printf("	push %%rbp\n");
 	printf("	mov %%rsp, %%rbp\n");
-	printf("	sub $%d, %%rsp\n", FRAMESZ);
+	printf("	sub $%d, %%rsp\n", size);
+	printf("	jmp .L%d\n", body);
 }
 
 void epilogue(void)

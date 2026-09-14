@@ -6,6 +6,7 @@
 
 #include "cc.h"
 #include "emit.h"
+#include "keywords.h"
 #include "parse.h"
 #include "util.h"
 
@@ -20,9 +21,19 @@ int main(int argc, char **argv)
 		return 1;
 	}
 
+	int setup;
+	int body;
+
 	line = curs = argv[1];
 	globl("main");
-	prologue();
+
+	/*
+	 * the frame size is only known once the declarations have been
+	 * parsed, so the stack setup hangs off the end of the function.
+	 */
+	setup = newlbl();
+	body  = newlbl();
+	beginframe(setup, body);
 
 	tyinit();
 	prog();
@@ -33,5 +44,7 @@ int main(int argc, char **argv)
 	lbl(".L_ret_main");
 	epilogue();
 	ret();
+
+	endframe(setup, body, framesize());
 	return 0;
 }

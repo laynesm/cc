@@ -23,7 +23,7 @@ static int brklbl[LOOPMAX];
 static int cntlbl[LOOPMAX];
 static int looppos = 0;
 
-static int newlbl(void)
+int newlbl(void)
 {
 	return lblcnt++;
 }

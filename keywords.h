@@ -1,6 +1,8 @@
 #ifndef KEYWORDS_H
 #define KEYWORDS_H
 
+int newlbl(void);
+
 void dogoto(struct keyword *);
 void doignored(struct keyword *);
 void doty(struct keyword *);
