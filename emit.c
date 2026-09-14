@@ -9,10 +9,10 @@ static void load_mem(int off, const char *from, int size, int sign)
 {
 	switch (size) {
 	case 1:
-		printf("mov%cbq %d(%s), %%rax\n", sign ? 's' : 'z', off, from);
+		printf("	mov%cbq %d(%s), %%rax\n", sign ? 's' : 'z', off, from);
 		break;
 	case 2:
-		printf("mov%cwq %d(%s), %%rax\n", sign ? 's' : 'z', off, from);
+		printf("	mov%cwq %d(%s), %%rax\n", sign ? 's' : 'z', off, from);
 		break;
 	case 4:
 		printf("	%s %d(%s), %%rax\n", sign ? "movslq" : "movl",
