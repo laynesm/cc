@@ -307,7 +307,10 @@ void stmt(int mode)
 	}
 
 	if (isalpha(*curs) || curs[0] == '_' || curs[0] == '$') {
-		const struct keyword *kw = readkeyword(0, -1);
+		char name[1024];
+		const char *savcurs      = curs;
+		const struct keyword *kw = readword(name, sizeof(name));
+
 		if (kw) {
 			/*
 			 * DECEXP only accepts declarations (a type) or plain
@@ -329,6 +332,16 @@ void stmt(int mode)
 			symdrop(depth--);
 			return;
 		}
+
+		skipws();
+		if (*curs == ':') {
+			advcurs(1);
+			printf(".L_lbl_%s:\n", name);
+			stmt(STMT);
+			return;
+		}
+
+		curs = savcurs;
 	}
 
 	expr_ty = defty;

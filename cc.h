@@ -57,6 +57,7 @@ struct lval;
 #define VOLATILE 12
 #define BREAK    13
 #define CONTINUE 14
+#define GOTO     15
 
 /*
  * representation of the C primitive types

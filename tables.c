@@ -30,6 +30,7 @@ const struct keyword kwtbl[] = {
 	[TYCHAR]     = {"char", TYCHAR, doty},
 	[BREAK]      = {"break", BREAK, dobreak},
 	[CONTINUE]   = {"continue", CONTINUE, docontinue},
+	[GOTO]       = {"goto", GOTO, dogoto},
 };
 
 /*

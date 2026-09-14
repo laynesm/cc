@@ -7,8 +7,7 @@
 	ou 384 não ser atributível a um char, 1285679 não ser atribuível a um short.
 	Checagem além desse básico que nós temos.
 
-- Implementar goto e labels (parece simples)
-- Implementar o switch 
+- Implementar o switch
 
 ===================================================================================
 		               TODOIST DO PROJETO 

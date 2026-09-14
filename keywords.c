@@ -63,6 +63,19 @@ static int parse_cond(const char *father)
 
 void doignored(struct keyword *) {}
 
+void dogoto(struct keyword *)
+{
+	char name[1024];
+	skipws();
+	readident(name, sizeof(name));
+
+	skipws();
+	if (*curs != ';') error("expected ';' after goto");
+	advcurs(1);
+
+	printf("	jmp .L_lbl_%s\n", name);
+}
+
 void doty(struct keyword *basety)
 {
 	char buf[KWMAX];
