@@ -11,9 +11,18 @@ struct lval {
 	int           lval_off;
 	int           lval_kind;
 	struct symty *lval_ty;
+
+	/*
+	 * a value the parser knows at compile time. when the flag is set no
+	 * asm has been emitted for it yet; materialize() turns it into rax.
+	 */
+	int           lval_isconst;
+	unsigned long long lval_val;
 };
 
 extern struct lval lval;
+
+void materialize(struct lval *);
 
 /*
  * assembly templates. only printed through emit() (fputs), so the strings

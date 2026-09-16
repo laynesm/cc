@@ -157,6 +157,7 @@ void decl(struct symty *ty)
 		 * its stack space.
 		 */
 		if (curty->sty_kind != TYARR) {
+			materialize(&lval);
 			lval.lval_off  = s->sym_off;
 			lval.lval_kind = STACK;
 			lval.lval_ty   = s->sym_ty;
@@ -180,7 +181,6 @@ void factor(void)
 	int base;
 
 	skipws();
-	/* future note: we will need check for -- and ++ before this */
 	un = unopundercurs();
 	if (un) {
 		advcurs(un->un_slen);
@@ -225,12 +225,24 @@ void factor(void)
 			lval.lval_kind = un->un_genlval;
 			lval.lval_off  = NONE;
 			lval.lval_ty   = l.lval_ty;
+			lval.lval_isconst   = 0;
 
 			runemit(un->un_emit, un->un_tpl, l);
 			return;
 		}
 
-		runemit(un->un_emit, un->un_tpl, lval);
+		/* the algebraic unaries fold a compile-time operand */
+		if (!lval.lval_isconst) {
+			runemit(un->un_emit, un->un_tpl, lval);
+			return;
+		}
+
+		switch (*un->un_str) {
+		case '-': lval.lval_val = (unsigned long long) - (long long)lval.lval_val; break;
+		case '~': lval.lval_val = ~lval.lval_val; break;
+		case '!': lval.lval_val = lval.lval_val == 0; break;
+		default:  break; /* unary '+' */
+		}
 		return;
 	}
 
@@ -265,10 +277,12 @@ void factor(void)
 			factor();
 			l = lval;
 			if (l.lval_kind == REGIS) deptr(l);
+			materialize(&lval);
 			cast(cty);
 			lval.lval_kind = NONE;
 			lval.lval_off  = NONE;
 			lval.lval_ty   = cty;
+			lval.lval_isconst   = 0;
 			return;
 		}
 
@@ -293,12 +307,14 @@ void factor(void)
 			lval.lval_kind = NONE;
 			lval.lval_off  = s->sym_off;
 			lval.lval_ty   = mkptr(s->sym_ty->sty_base);
+			lval.lval_isconst   = 0;
 			return;
 		}
 
 		lval.lval_kind = STACK;
 		lval.lval_off  = s->sym_off;
 		lval.lval_ty   = s->sym_ty;
+		lval.lval_isconst   = 0;
 		load(lval);
 		return;
 	}
@@ -324,9 +340,10 @@ void factor(void)
 	curs = end;
 	skipws();
 
-	retval(val);
-	lval.lval_kind = NONE;
-	lval.lval_ty   = expr_ty->sty_kind == TYPTR ? defty : inferty(val);
+	lval.lval_kind   = NONE;
+	lval.lval_ty     = expr_ty->sty_kind == TYPTR ? defty : inferty(val);
+	lval.lval_isconst = 1;
+	lval.lval_val    = val;
 }
 
 void pointarith(const struct operator *op, struct symty *lhsty, struct symty *rhsty, int iscompound)
@@ -367,6 +384,50 @@ static void derefvalue(struct lval *lv)
 	derefpend = 0;
 }
 
+/*
+ * compile-time evaluation: mirrors what the emitted asm would do, so the
+ * fold and the machine agree. the operator's index is its table position.
+ * returns 0 when the operator has no fold or the fold must not happen.
+ */
+static int foldop(const struct operator *op, unsigned long long l,
+                  unsigned long long r, unsigned long long *out)
+{
+	switch (op - optbl) {
+	case OPADD: *out = l + r; break;
+	case OPSUB: *out = l - r; break;
+	case OPMUL: *out = l * r; break;
+	case OPSHL: *out = l << (r & 63); break;
+	case OPSHR: *out = l >> (r & 63); break;
+	case OPBAND: *out = l & r; break;
+	case OPBOR:  *out = l | r; break;
+	case OPXOR:  *out = l ^ r; break;
+
+	/* idiv is signed; a zero divisor keeps the runtime crash */
+	case OPDIV:
+		if (r == 0) return 0;
+		*out = (unsigned long long)((long long)l / (long long)r);
+		break;
+	case OPREM:
+		if (r == 0) return 0;
+		*out = (unsigned long long)((long long)l % (long long)r);
+		break;
+
+	/* compares and the boolean ops narrow to 0/1 */
+	case OPEQ: *out = l == r; break;
+	case OPNEQ: *out = l != r; break;
+	case OPLT: *out = (long long)l < (long long)r; break;
+	case OPGT: *out = (long long)l > (long long)r; break;
+	case OPLE: *out = (long long)l <= (long long)r; break;
+	case OPGE: *out = (long long)l >= (long long)r; break;
+	case OPAND: *out = l != 0 && r != 0; break;
+	case OPOR:  *out = l != 0 || r != 0; break;
+
+	default:
+		return 0;
+	}
+	return 1;
+}
+
 void expr(int min_prec)
 {
 	struct symty *saved = expr_ty;
@@ -397,6 +458,8 @@ void expr(int min_prec)
 
 			if (l.lval_kind == REGIS) regispost();
 
+			materialize(&lval);
+
 			if (op->op_assign != ASMOD) {
 				if (op->op_assign == ASTORE || (l.lval_ty->sty_kind != TYPTR && lval.lval_ty->sty_kind != TYPTR))
 					tyassign(l.lval_ty, lval.lval_ty);
@@ -408,6 +471,7 @@ void expr(int min_prec)
 
 			lval.lval_kind = NONE;
 			lval.lval_ty   = l.lval_ty;
+			lval.lval_isconst   = 0;
 			continue;
 		}
 
@@ -419,26 +483,62 @@ void expr(int min_prec)
 			derefvalue(&lval);
 			deptr(lval);
 			lval.lval_kind = NONE;
+			lval.lval_isconst   = 0;
 		}
 
 		/*
 		 * If it is left-associated, overwrite the l-value.
 		 */
-		lhs_ty         = lval.lval_ty;
-		lval.lval_kind = lval.lval_off = NONE;
+		{
+			int                lhs_cst = lval.lval_isconst;
+			unsigned long long lhsv    = lval.lval_val;
 
-		printf("	push %%rax\n");
-		expr_ty = lhs_ty;
-		expr(op->op_postfix ? -1 : op->op_precedence + 1);
-		printf("	pop %%rcx\n");
+			lhs_ty         = lval.lval_ty;
+			lval.lval_kind = lval.lval_off = NONE;
+			lval.lval_isconst   = 0;
 
-		printf("	xchg %%rax, %%rcx\n");
+			if (lhs_cst) {
+				/* a pending constant costs nothing to keep */
+				expr_ty = lhs_ty;
+				expr(op->op_postfix ? -1 : op->op_precedence + 1);
 
-		if (op->op_ptr == PTRARITH || op->op_ptr == NOPTR)
-			pointarith(op, lhs_ty, lval.lval_ty, 0);
+				/*
+				 * both operands were compile-time values: fold in C
+				 * and emit nothing. a pointer lhs is skipped --
+				 * pointer values never leave the type system as
+				 * consts.
+				 */
+				if (lval.lval_isconst && lhs_ty->sty_kind != TYPTR &&
+				    foldop(op, lhsv, lval.lval_val, &lval.lval_val))
+					continue;
 
-		lval.lval_ty = lhs_ty;
-		runemit(op->op_emit, op->op_tpl, lval);
+				/* park the materialized rhs, reload the lhs */
+				materialize(&lval);
+				printf("	push %%rax\n");
+				printf("	pop %%rcx\n");
+				retval(lhsv);
+			} else {
+				printf("	push %%rax\n");
+				expr_ty = lhs_ty;
+				expr(op->op_postfix ? -1 : op->op_precedence + 1);
+
+				if (lval.lval_isconst) {
+					/* rhs is a compile-time value: an immediate */
+					printf("	pop %%rcx\n");
+					printf("	mov $%llu, %%rcx\n", lval.lval_val);
+					lval.lval_isconst = 0;
+				} else {
+					printf("	pop %%rcx\n");
+					printf("	xchg %%rax, %%rcx\n");
+				}
+			}
+
+			if (op->op_ptr == PTRARITH || op->op_ptr == NOPTR)
+				pointarith(op, lhs_ty, lval.lval_ty, 0);
+
+			lval.lval_ty = lhs_ty;
+			runemit(op->op_emit, op->op_tpl, lval);
+		}
 	}
 
 	if (lval.lval_kind == REGIS) {
@@ -527,6 +627,7 @@ void stmt(int mode)
 
 	expr_ty = defty;
 	expr(-1);
+	materialize(&lval);
 	skipws();
 	if (*curs != ';') {
 		if (*curs == '\0' || iscntrl(*curs)) error("expected ';'");

@@ -56,6 +56,7 @@ static int parse_cond(const char *father)
 	if (*curs != ')') error("missing ')' for %s", father);
 	advcurs(1);
 
+	materialize(&lval);
 	cmp(0);
 	jelbl(false_lbl);
 
@@ -248,6 +249,7 @@ void dofor(const struct keyword *)
 	if (*curs != ';') {
 		expr_ty = defty;
 		expr(0);
+		materialize(&lval);
 		cmp(0);
 		jelbl(end_lbl);
 	}
@@ -322,6 +324,7 @@ void dodowhile(const struct keyword *)
 	advcurs(1);
 	if (*curs != ';') error("missing ';'");
 
+	materialize(&lval);
 	cmp(0);
 	jnelbl(start_lbl);
 

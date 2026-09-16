@@ -272,6 +272,14 @@ void runemit(void (*fn)(struct lval), const char *tpl, struct lval l)
 	if (fn) fn(l); else emit(tpl);
 }
 
+/* turn a pending compile-time value into a real rax result */
+void materialize(struct lval *lv)
+{
+	if (!lv->lval_isconst) return;
+	retval(lv->lval_val);
+	lv->lval_isconst = 0;
+}
+
 void cast(struct symty *ty)
 {
 	static const char *const casttpl[2][9] = {
