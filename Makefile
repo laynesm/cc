@@ -4,7 +4,7 @@
 CC = cc -g
 CFLAGS = -Wall -Wextra -std=c99
 
-OBJS = main.o parse.o emit.o tables.o util.o ident.o keywords.o
+OBJS = main.o parse.o emit.o tables.o util.o ident.o keywords.o type.o
 
 all: cc
 
@@ -12,10 +12,11 @@ cc: $(OBJS)
 	$(CC) $(CFLAGS) -o cc $(OBJS)
 
 main.o: main.c cc.h parse.h emit.h util.h
-parse.o: parse.c parse.h cc.h emit.h util.h
+parse.o: parse.c parse.h cc.h emit.h util.h type.h
 emit.o: emit.c emit.h cc.h
 tables.o: tables.c cc.h emit.h
 util.o: util.c util.h cc.h
+type.o: type.c type.h cc.h util.h ident.h keywords.h
 
 .c.o:
 	$(CC) $(CFLAGS) -c $<

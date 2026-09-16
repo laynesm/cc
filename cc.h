@@ -168,7 +168,6 @@ enum tykind {
  * field is reserved from the start so the typool layout stays put.
  */
 struct fnsig {
-	struct symty  *fs_ret;
 	struct symty **fs_args;
 	int            fs_nargs;
 	int            fs_cap;
@@ -183,8 +182,6 @@ struct symty {
 	int          sty_kind;
 	int          sty_size;
 	int          sty_signed;
-	int          sty_align;
-	int          sty_len;
 	struct symty *sty_base;
 	struct fnsig *sty_sig;
 };

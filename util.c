@@ -29,9 +29,6 @@ struct symty *sclty(int size, int sign)
 	ty->sty_kind   = TYSCALR;
 	ty->sty_size   = size;
 	ty->sty_signed = sign;
-	ty->sty_align  = size;
-	ty->sty_base   = NULL;
-	ty->sty_sig    = NULL;
 	return ty;
 }
 
@@ -41,7 +38,6 @@ struct symty *mkptr(struct symty *base)
 
 	ty->sty_kind = TYPTR;
 	ty->sty_size = 8;
-	ty->sty_align = 8;
 	ty->sty_base = base;
 	return ty;
 }
@@ -52,8 +48,6 @@ struct symty *mkarray(struct symty *base, int len)
 
 	ty->sty_kind  = TYARR;
 	ty->sty_size  = base->sty_size * len;
-	ty->sty_align = base->sty_align;
-	ty->sty_len   = len;
 	ty->sty_base  = base;
 	return ty;
 }
@@ -64,10 +58,8 @@ struct symty *mkfunc(struct symty *ret, struct fnsig *sig)
 
 	ty->sty_kind  = TYFUNC;
 	ty->sty_size  = 8;
-	ty->sty_align = 8;
 	ty->sty_base  = ret;
 	ty->sty_sig   = sig;
-	sig->fs_ret   = ret;
 	return ty;
 }
 

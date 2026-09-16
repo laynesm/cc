@@ -1,9 +1,8 @@
 #include <ctype.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
 #include <errno.h>
 #include <limits.h>
+#include <stdio.h>
+#include <stdlib.h>
 
 #include "cc.h"
 #include "emit.h"
@@ -17,8 +16,22 @@ struct lval lval;
 
 struct symty *expr_ty;
 
+/*
+ * subscript into optbl of the operator that glued the whole expression
+ * together. only the outermost expr() call fills it, so a condition
+ * knows whether its root was a bare assignment ('if (x=1)').
+ */
+int expr_rootop;
+
 /* a dereference deferred because a postfix operator binds first */
 static int derefpend;
+
+/*
+ * whether the statement being parsed has emitted a side effect
+ * (an assignment or ++/--). read at the end of the expression
+ * statement: false means the statement does nothing.
+ */
+static int effect;
 
 /*
  * basic assignment type checking.
@@ -139,6 +152,12 @@ void factor(void)
 
 		if (un->un_assoc == OPASSOCR) {
 			struct lval l = lval;
+
+			/*
+			 * only ++/-- (PTRARITH) write: unary '*' and '&' just
+			 * shape up a value, so they never count as an effect.
+			 */
+			if (un->un_ptr == PTRARITH) effect = 1;
 
 			if (un->un_ptr == DEPTR) {
 				if (l.lval_ty->sty_kind != TYPTR)
@@ -380,6 +399,16 @@ void expr(int min_prec)
 {
 	struct symty *saved = expr_ty;
 	int           savedep = derefpend;
+	static int    depth;
+
+	/*
+	 * the root operator of the whole expression is the one consumed at
+	 * the outermost call: everything nested works on a sub-expression.
+	 * every top-level call starts a fresh expression, so the output
+	 * slot needs no save/restore across them.
+	 */
+	if (depth == 0) expr_rootop = -1;
+	depth++;
 
 	derefpend = 0;
 
@@ -392,11 +421,17 @@ void expr(int min_prec)
 		if (!op || op->op_precedence < min_prec) break;
 		advcurs(op->op_slen);
 
+		if (depth == 1) expr_rootop = (int)(op - optbl);
+
 		if (op->op_assoc == OPASSOCR) {
 			struct lval l = lval;
 			if (l.lval_kind == NONE)
 				error("assignment without an l-value.");
 			derefvalue(&l);
+
+			/* an assignment always writes, whatever its outcome */
+			effect = 1;
+
 			if (l.lval_kind == REGIS) regispre();
 
 			if (op->op_assign != ASMOD) {
@@ -497,6 +532,7 @@ void expr(int min_prec)
 
 	derefpend = savedep;
 	expr_ty = saved;
+	depth--;
 }
 
 void stmt(int mode)
@@ -573,6 +609,7 @@ void stmt(int mode)
 		curs = savcurs;
 	}
 
+	effect = 0;
 	expr_ty = defty;
 	expr(-1);
 	materialize(&lval);
@@ -581,6 +618,13 @@ void stmt(int mode)
 		if (*curs == '\0' || iscntrl(*curs)) error("expected ';'");
 		error("trailing characters '%c'", *curs++);
 	}
+
+	/*
+	 * a statement whose expression performed no write has no observable
+	 * effect ('1;', 'x;', 'x + 1;'). assignments and ++/-- set the flag.
+	 * DECEXP (the for-init clause) skips the check: 'i;' there is fine.
+	 */
+	if (mode == STMT && !effect) warn("statement with no effect");
 
 	advcurs(1);
 }

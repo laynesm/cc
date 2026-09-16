@@ -1,7 +1,5 @@
 #include <ctype.h>
 #include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
 
 #include "cc.h"
 #include "emit.h"
@@ -51,7 +49,16 @@ static int parse_cond(const char *father)
 	advcurs(1);
 
 	expr_ty = defty;
-	expr(0);
+	expr(-1);
+
+	/*
+	 * a bare '=' as the truth value is almost always a typo for '==':
+	 * nudge like gcc does, but skip it when extra parens already say
+	 * 'i meant it' -- the root op of '(x = 1)' is the paren, not '='.
+	 */
+	if (expr_rootop == OPASSIGN)
+		warn("suggest parentheses around assignment used as truth "
+		     "value");
 
 	skipws();
 	if (*curs != ')') error("missing ')' for %s", father);
@@ -120,7 +127,8 @@ void doty(const struct keyword *basety)
 void doreturn(const struct keyword *)
 {
 	expr_ty = defty;
-	expr(0);
+	expr(-1);
+	materialize(&lval);
 	jmp(".L_ret_main");
 }
 
@@ -196,7 +204,10 @@ void dofor(const struct keyword *)
 
 	if (*curs != ';') {
 		expr_ty = defty;
-		expr(0);
+		expr(-1);
+		if (expr_rootop == OPASSIGN)
+			warn("suggest parentheses around assignment used as "
+			     "truth value");
 		materialize(&lval);
 		cmp(0);
 		jelbl(end_lbl);
@@ -266,7 +277,10 @@ void dodowhile(const struct keyword *)
 
 	idlbl(cont_lbl);
 	expr_ty = defty;
-	expr(0);
+	expr(-1);
+	if (expr_rootop == OPASSIGN)
+		warn("suggest parentheses around assignment used as truth "
+		     "value");
 	skipws();
 	if (*curs != ')') error("missing ')' for do-while");
 	advcurs(1);
