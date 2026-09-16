@@ -11,6 +11,9 @@
 
 static int lblcnt = 0;
 
+int           funcretlbl;
+struct symty *funcretty;
+
 /*
  * stack of the innermost loop's break/continue targets.
  * break jumps to the loop-end label, continue to the loop-top
@@ -73,6 +76,12 @@ static int parse_cond(const char *father)
 
 void doignored(const struct keyword *) {}
 
+void doextern(const struct keyword *)
+{
+	if (extdecl) error("duplicate storage class");
+	extdecl = 1;
+}
+
 void dogoto(const struct keyword *)
 {
 	char name[1024];
@@ -121,15 +130,39 @@ void doty(const struct keyword *basety)
 
 	/* settle depth back for the later symdrop */
 	depth++;
-	advcurs(1);
+	skipws();
+
+	/*
+	 * decl() leaves the cursor at the ';' of an object declaration, but
+	 * a function definition already consumed its own '}' -- the ';'
+	 * after it is optional in assembly, so only eat one when present.
+	 */
+	if (*curs == ';') advcurs(1);
 }
 
 void doreturn(const struct keyword *)
 {
 	expr_ty = defty;
+
+	skipws();
+
+	/* 'return;' is legal in a void function */
+	if (*curs == ';') {
+		advcurs(1);
+		jmplbl(funcretlbl);
+		return;
+	}
+
 	expr(-1);
 	materialize(&lval);
-	jmp(".L_ret_main");
+
+	if (funcretty && funcretty->sty_size == 0)
+		error("'return' with a value in a void function");
+
+	jmplbl(funcretlbl);
+
+	skipws();
+	if (*curs == ';') advcurs(1);
 }
 
 void doif(const struct keyword *)

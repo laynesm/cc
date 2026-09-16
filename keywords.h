@@ -5,6 +5,7 @@ int newlbl(void);
 
 void dogoto(const struct keyword *);
 void doignored(const struct keyword *);
+void doextern(const struct keyword *);
 void doty(const struct keyword *);
 void doif(const struct keyword *);
 void doelse(const struct keyword *);

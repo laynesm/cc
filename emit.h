@@ -18,6 +18,13 @@ struct lval {
 	 */
 	int           lval_isconst;
 	unsigned long long lval_val;
+
+	/*
+	 * when set the l-value lives in a file-scope object: its address is
+	 * lval_glob(%rip), not an %rbp displacement.
+	 */
+	int           lval_isglob;
+	char          lval_glob[SYMMAX];
 };
 
 extern struct lval lval;
@@ -103,5 +110,13 @@ void globl(const char *);
 void retval(unsigned long long);
 void ret(void);
 void cast(struct symty *);
+
+/* a file-scope object: .data with a constant value, or .comm (tentative) */
+void globdata(const char *, int, int, unsigned long long);
+void globcomm(const char *, int, int);
+
+/* switch the assembly section, only when it actually changes */
+void sectext(void);
+void sectdata(void);
 
 #endif

@@ -34,6 +34,11 @@ struct lval;
 #define STMT   (0)
 #define DECEXP (1)
 
+/* storage classes */
+#define SCLOCAL (0) /* frame slot, block scope */
+#define SCGLOB  (1) /* file-scope object, .data/.comm */
+#define SCEXT   (2) /* extern: declared, storage elsewhere */
+
 /*
  * operations.
  * the table is matched in this very order, so longer strings
@@ -96,6 +101,7 @@ struct lval;
 #define BREAK    13
 #define CONTINUE 14
 #define GOTO     15
+#define EXTERN   17
 
 /*
  * representation of the C primitive types
@@ -182,6 +188,7 @@ struct symty {
 	int          sty_kind;
 	int          sty_size;
 	int          sty_signed;
+	int          sty_align;
 	struct symty *sty_base;
 	struct fnsig *sty_sig;
 };
@@ -197,6 +204,8 @@ struct sym {
 	int           sym_off;
 	int           sym_scope;
 	struct symty *sym_ty;
+	int           sym_stcls;
+	int           sym_done;
 };
 
 /*
@@ -206,6 +215,23 @@ struct symtab {
 	struct sym tab_syms[SYMTABMAX];
 	int        tab_nsyms;
 	int        tab_stackoff;
+};
+
+/*
+ * file-scope functions: declared by a prototype, possibly followed by a
+ * body. kept apart from the object table because a function has no frame
+ * slot and never is an l-value. the signature (func_ty) is checked for
+ * merges: two declarations must agree, a body may only be seen once.
+ */
+#define FUNMAX 128
+struct func {
+	char          func_name[SYMMAX];
+	struct symty *func_ty;
+	int           func_defined;
+};
+struct funtab {
+	struct func tab_funcs[FUNMAX];
+	int         tab_nfuncs;
 };
 
 extern const struct type tytbl[];
@@ -221,9 +247,14 @@ const struct unary *unopundercurs(void);
 const struct operator *opundercurs(void);
 
 struct sym *symlookup(char *, int);
-struct sym *symadd(char *, int, struct symty *);
+struct sym *symadd(char *, int, struct symty *, int);
 int framesize(void);
 void symdrop(int);
+int symsave(void);
+void symrestore(int);
+
+struct func *funclookup(const char *);
+struct func *funcadd(const char *, struct symty *, int);
 
 const struct keyword *kwlookup(const char *); 
 

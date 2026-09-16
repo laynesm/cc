@@ -13,6 +13,7 @@ void tyinit(void);
 
 /* width in bytes of a value of this type (pointers are 8)     */
 int stysize(struct symty *);
+int symalign(struct symty *);
 
 /* how many bytes ++/-- advance for a symbol of this type      */
 int ptrstep(struct symty *);

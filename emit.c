@@ -8,29 +8,42 @@
 /*
  * load/store templates, indexed [sign][size] and [size]: sizes are 1, 2, 4
  * and 8 bytes so they land in the middle of the table, holes stay NULL.
+ * the address comes in whole, since a file-scope object's operand is
+ * 'g(%rip)', not a bare displacement.
  */
 static const char *const ldtpl[2][9] = {
-	{ NULL, "\tmovzbq %d(%s), %%rax\n", "\tmovzwq %d(%s), %%rax\n", NULL,
-	  "\tmovl %d(%s), %%eax\n", NULL, NULL, NULL, "\tmov %d(%s), %%rax\n" },
-	{ NULL, "\tmovsbq %d(%s), %%rax\n", "\tmovswq %d(%s), %%rax\n", NULL,
-	  "\tmovslq %d(%s), %%rax\n", NULL, NULL, NULL, "\tmov %d(%s), %%rax\n" },
+	{ NULL, "\tmovzbq %s, %%rax\n", "\tmovzwq %s, %%rax\n", NULL,
+	  "\tmovl %s, %%eax\n", NULL, NULL, NULL, "\tmov %s, %%rax\n" },
+	{ NULL, "\tmovsbq %s, %%rax\n", "\tmovswq %s, %%rax\n", NULL,
+	  "\tmovslq %s, %%rax\n", NULL, NULL, NULL, "\tmov %s, %%rax\n" },
 };
 
-static void load_mem(int off, const char *from, int size, int sign)
+static void load_mem(const char *op, int size, int sign)
 {
 	if (!ldtpl[sign][size]) error("not yet implemented - load");
-	printf(ldtpl[sign][size], off, from);
+	printf(ldtpl[sign][size], op);
 }
 
 static const char *const sttpl[9] = {
-	NULL, "\tmovb %%al, %d(%s)\n", "\tmovw %%ax, %d(%s)\n", NULL,
-	"\tmovl %%eax, %d(%s)\n", NULL, NULL, NULL, "\tmovq %%rax, %d(%s)\n",
+	NULL, "\tmovb %%al, %s\n", "\tmovw %%ax, %s\n", NULL,
+	"\tmovl %%eax, %s\n", NULL, NULL, NULL, "\tmovq %%rax, %s\n",
 };
 
-static void store_mem(int off, const char *to, int size)
+static void store_mem(const char *op, int size)
 {
 	if (!sttpl[size]) error("not implemented yet - store");
-	printf(sttpl[size], off, to);
+	printf(sttpl[size], op);
+}
+
+/*
+ * the memory operand behind an l-value: a frame displacement or a
+ * %rip-relative file-scope object.
+ */
+static const char *memop(struct lval l, char *buf, size_t len)
+{
+	if (l.lval_isglob) snprintf(buf, len, "%s(%%rip)", l.lval_glob);
+	else              snprintf(buf, len, "%d(%%rbp)", l.lval_off);
+	return buf;
 }
 
 static void someq(struct lval l, const char *inst, const char *outreg)
@@ -38,7 +51,12 @@ static void someq(struct lval l, const char *inst, const char *outreg)
 	printf("	push %%rax\n");
 	load(l);
 	printf("	pop %%rcx\n");
-	printf("	%s %%rcx,%%rax\n", inst);
+	if (strcmp(inst, "idiv") == 0) {
+		printf("	cqo\n");
+		printf("	idiv %%rcx\n");
+	} else {
+		printf("	%s %%rcx,%%rax\n", inst);
+	}
 	if (strcmp(outreg, "rax") != 0) printf("	mov %%%s,%%rax\n", outreg);
 	store(l);
 }
@@ -157,12 +175,19 @@ void deptr(struct lval l)
 {
 	if (l.lval_ty->sty_size == 0)
 		error("cannot dereference a void pointer");
-	load_mem(0, "%rax", l.lval_ty->sty_size, l.lval_ty->sty_signed);
+	load_mem("0(%rax)", l.lval_ty->sty_size, l.lval_ty->sty_signed);
 }
 
 void ptr(struct lval l)
 {
-	printf("	lea %d(%%rbp), %%rax\n", l.lval_off);
+	char buf[SYMMAX + 8];
+
+	if (l.lval_isglob)
+		snprintf(buf, sizeof(buf), "%s(%%rip)", l.lval_glob);
+	else
+		snprintf(buf, sizeof(buf), "%d(%%rbp)", l.lval_off);
+
+	printf("	lea %s, %%rax\n", buf);
 }
 
 void jmplbl(int id)
@@ -224,27 +249,29 @@ void epilogue(void)
 
 void load(struct lval l)
 {
-	int size = stysize(l.lval_ty);
-	int sign = l.lval_ty->sty_signed;
+	char buf[SYMMAX + 8];
+	int  size = stysize(l.lval_ty);
+	int  sign = l.lval_ty->sty_signed;
 
 	if (l.lval_kind == REGIS) {
-		load_mem(0, "%rax", size, sign);
+		load_mem("0(%rax)", size, sign);
 		return;
 	}
 
-	load_mem(l.lval_off, "%rbp", size, sign);
+	load_mem(memop(l, buf, sizeof(buf)), size, sign);
 }
 
 void store(struct lval l)
 {
-	int size = stysize(l.lval_ty);
+	char buf[SYMMAX + 8];
+	int  size = stysize(l.lval_ty);
 
 	if (l.lval_kind == REGIS) {
-		store_mem(0, "%rcx", size);
+		store_mem("0(%rcx)", size);
 		return;
 	}
 
-	store_mem(l.lval_off, "%rbp", size);
+	store_mem(memop(l, buf, sizeof(buf)), size);
 }
 
 void lbl(const char *s)
@@ -304,4 +331,55 @@ void retval(unsigned long long val)
 void ret(void)
 {
 	printf("	ret\n");
+}
+
+/*
+ * the assembler starts in .text; a switch only happens when a global
+ * object forces the output into .data, and the next function body or
+ * .comm directive must not inherit it.
+ */
+static int intext = 1;
+
+void sectext(void)
+{
+	if (intext) return;
+	printf("	.text\n");
+	intext = 1;
+}
+
+void sectdata(void)
+{
+	if (!intext) return;
+	printf("	.data\n");
+	intext = 0;
+}
+
+void globcomm(const char *name, int size, int align)
+{
+	printf("	.comm %s,%d,%d\n", name, size, align);
+}
+
+static int p2log(int n)
+{
+	int log = 0;
+
+	while (n > 1) { n >>= 1; log++; }
+	return log;
+}
+
+/* sizes are powers of two: 1/2/4/8 map to .byte/.word/.long/.quad */
+static const char *const sztpl[9] = {
+	NULL, ".byte ", ".word ", NULL, ".long ", NULL, NULL, NULL, ".quad ",
+};
+
+void globdata(const char *name, int size, int align, unsigned long long val)
+{
+	sectdata();
+	printf("	.p2align %d\n", p2log(align));
+	printf("	.globl %s\n", name);
+	lbl(name);
+
+	if (size <= 0 || size > 8 || !sztpl[size])
+		error("cannot lay out global '%s'", name);
+	printf("	%s%llu\n", sztpl[size], val);
 }

@@ -3,6 +3,7 @@
 #include <limits.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 #include "cc.h"
 #include "emit.h"
@@ -25,6 +26,12 @@ int expr_rootop;
 
 /* a dereference deferred because a postfix operator binds first */
 static int derefpend;
+
+/* set by 'extern', cleared by the declaration that consumes it */
+int extdecl;
+
+/* the statement mode currently being parsed (STMT vs DECEXP) */
+static int curstmt;
 
 /*
  * whether the statement being parsed has emitted a side effect
@@ -67,9 +74,58 @@ static void tyassign(struct symty *dst, struct symty *src)
 		     (src->sty_size - dst->sty_size) * 8);
 }
 
+/*
+ * a type keyword that turned into a function. the signature is recorded
+ * in the funtab; a body following the declarator gets its own frame and
+ * prologue, a plain ';' keeps it a prototype. the shared stack-offset
+ * counter is parked back to its pre-function base either way, so the
+ * next declaration starts a fresh accounting. returns whether a body was
+ * parsed: a definition ends the declaration, it carries no trailing ';'.
+ */
+static int fndecl(const char *name, struct symty *ty, int framesave)
+{
+	int setup = newlbl();
+	int body  = newlbl();
+
+	if (*curs != '{') {
+		/* a prototype: no code, the parameters never become frame slots */
+		funcadd(name, ty, 0);
+		symdrop(depth + 1);
+		symrestore(framesave);
+		return 0;
+	}
+
+	funcadd(name, ty, 1);
+	funcretty = ty->sty_base;
+	funcretlbl = newlbl();
+
+	sectext();
+	globl(name);
+	beginframe(setup, body);
+
+	stmt(STMT); /* the body block */
+
+	idlbl(funcretlbl);
+	epilogue();
+	ret();
+	endframe(setup, body, framesize());
+
+	symrestore(framesave);
+
+	/* a stray ';' after the '}' is a null statement, not part of this one */
+	skipws();
+	if (*curs == ';') advcurs(1);
+	return 1;
+}
+
 void decl(struct symty *ty)
 {
-	int remaining = 0;
+	int   remaining = 0;
+	int   framesave = symsave();
+	int   cls = extdecl ? SCEXT
+	                   : (curstmt == STMT && depth == 0) ? SCGLOB : SCLOCAL;
+
+	extdecl = 0;
 
 	do {
 		struct sym   *s;
@@ -82,51 +138,86 @@ void decl(struct symty *ty)
 		if (declname[0] == '\0')
 			error("declaration without a name");
 
-		s = symadd(declname, depth, curty);
+		if (curty->sty_kind == TYFUNC) {
+			/* a body already consumed its own ';' */
+			if (fndecl(declname, curty, framesave))
+				break;
+			skipws();
+		} else {
+			s = symadd(declname, depth, curty, cls);
 
-		/*
-		 * a zero-sized type is the void type: it may only show up
-		 * behind a pointer ('void *') or as a function result,
-		 * never as a standalone object.
-		 */
-		if (stysize(curty) == 0)
-			error("variable '%s' cannot be void", s->sym_name);
+			/*
+			 * a zero-sized type is the void type: it may only show up
+			 * behind a pointer ('void *') or as a function result,
+			 * never as a standalone object.
+			 */
+			if (stysize(curty) == 0)
+				error("variable '%s' cannot be void", s->sym_name);
 
-		skipws();
+			skipws();
+
+			if (cls == SCLOCAL) {
+				if (*curs == '=') {
+					if (curty->sty_kind == TYARR)
+						error("array initializer not yet supported");
+					advcurs(1);
+					expr_ty = s->sym_ty;
+					expr(-1);
+					tyassign(s->sym_ty, lval.lval_ty);
+				} else if (curty->sty_kind == TYARR) {
+					/*
+					 * a default array has no single element to store:
+					 * zero out the whole reserved region in one go.
+					 */
+					printf("\tlea %d(%%rbp), %%rdi\n", s->sym_off);
+					printf("\txor %%eax, %%eax\n");
+					printf("\tmov $%d, %%rcx\n", stysize(curty));
+					printf("\trep stosb\n");
+				} else {
+					printf("\txor %%rax,%%rax\n");
+				}
+
+				/*
+				 * an array has no single value to store: it only reserves
+				 * its stack space.
+				 */
+				if (curty->sty_kind != TYARR) {
+					materialize(&lval);
+					lval.lval_off  = s->sym_off;
+					lval.lval_kind = STACK;
+					lval.lval_ty   = s->sym_ty;
+					store(lval);
+				}
+} else {
+				/*
+				 * a file-scope object accepts only a constant
+				 * initializer: no code may run before the program does.
+				 */
+				if (*curs == '=') {
+					advcurs(1);
+					expr_ty = s->sym_ty;
+					expr(-1);
+					tyassign(s->sym_ty, lval.lval_ty);
+
+					if (!lval.lval_isconst)
+						error("initializer element is not constant");
+
+					if (cls == SCGLOB) {
+						if (s->sym_done)
+							error("redefinition of '%s'", s->sym_name);
+						globdata(s->sym_name, stysize(curty),
+						         symalign(curty), lval.lval_val);
+						s->sym_done = 1;
+					}
+				} else if (cls == SCGLOB && !s->sym_done) {
+					/* a tentative object: common storage, once */
+					globcomm(s->sym_name, stysize(curty),
+					         symalign(curty));
+				}
+			}
+		}
 
 		remaining = 0;
-
-		if (*curs == '=') {
-			if (curty->sty_kind == TYARR)
-				error("array initializer not yet supported");
-			advcurs(1);
-			expr_ty = s->sym_ty;
-			expr(-1);
-			tyassign(s->sym_ty, lval.lval_ty);
-		} else if (curty->sty_kind == TYARR) {
-			/*
-			 * a default array has no single element to store:
-			 * zero out the whole reserved region in one go.
-			 */
-			printf("\tlea %d(%%rbp), %%rdi\n", s->sym_off);
-			printf("\txor %%eax, %%eax\n");
-			printf("\tmov $%d, %%rcx\n", stysize(curty));
-			printf("\trep stosb\n");
-		} else {
-			printf("\txor %%rax,%%rax\n");
-		}
-
-		/*
-		 * an array has no single value to store: it only reserves
-		 * its stack space.
-		 */
-		if (curty->sty_kind != TYARR) {
-			materialize(&lval);
-			lval.lval_off  = s->sym_off;
-			lval.lval_kind = STACK;
-			lval.lval_ty   = s->sym_ty;
-			store(lval);
-		}
 
 		if (*curs == ',') {
 			advcurs(1);
@@ -185,7 +276,7 @@ void factor(void)
 				}
 
 				l.lval_ty = l.lval_ty->sty_base;
-			} else if (l.lval_off == NONE) {
+			} else if (l.lval_off == NONE && !l.lval_isglob) {
 				error("l-value required for unary '%s' operand",
 				      un->un_str);
 			}
@@ -196,6 +287,7 @@ void factor(void)
 			lval.lval_off  = NONE;
 			lval.lval_ty   = l.lval_ty;
 			lval.lval_isconst   = 0;
+			lval.lval_isglob    = 0;
 
 			runemit(un->un_emit, un->un_tpl, l);
 			return;
@@ -250,6 +342,7 @@ void factor(void)
 			lval.lval_off  = NONE;
 			lval.lval_ty   = cty;
 			lval.lval_isconst   = 0;
+			lval.lval_isglob    = 0;
 			return;
 		}
 
@@ -262,8 +355,59 @@ void factor(void)
 		return;
 	}
 
-	if (isalpha(*curs)) {
-		struct sym *s  = readsym(-1);
+if (isalpha(*curs) || *curs == '_' || *curs == '$') {
+		char       *savcurs = curs;
+		struct sym *s;
+		char        name[SYMMAX];
+
+		readident(name, sizeof(name));
+		skipws();
+
+		s = symlookup(name, -1);
+		if (!s) {
+			struct func *f = funclookup(name);
+
+			if (!f) {
+				curs = savcurs;
+				error("undefined usage of '%s'", name);
+			}
+
+			/* a function name is the address of its entry point */
+			printf("	lea %s(%%rip), %%rax\n", f->func_name);
+			lval.lval_kind = NONE;
+			lval.lval_off  = NONE;
+			lval.lval_ty   = mkptr(f->func_ty);
+			lval.lval_isconst = 0;
+			lval.lval_isglob  = 0;
+			return;
+		}
+
+		/*
+		 * a file-scope object is addressed by name, not by a frame
+		 * slot. externs address the same way: the linker fills in.
+		 */
+		if (s->sym_stcls >= SCGLOB) {
+			if (s->sym_ty->sty_kind == TYARR) {
+				printf("	lea %s(%%rip), %%rax\n", s->sym_name);
+				lval.lval_kind = NONE;
+				lval.lval_off  = s->sym_off;
+				lval.lval_ty   = mkptr(s->sym_ty->sty_base);
+				lval.lval_isconst = 0;
+				lval.lval_isglob  = 0;
+				return;
+			}
+
+			lval.lval_kind  = STACK;
+			lval.lval_off   = NONE;
+			lval.lval_isglob = 1;
+			strncpy(lval.lval_glob, s->sym_name,
+			        sizeof(lval.lval_glob) - 1);
+			lval.lval_glob[sizeof(lval.lval_glob) - 1] = '\0';
+			lval.lval_ty    = s->sym_ty;
+			lval.lval_isconst = 0;
+			load(lval);
+			return;
+		}
 
 		/*
 		 * outside an initializer an array has no value: using its
@@ -274,14 +418,16 @@ void factor(void)
 			lval.lval_kind = NONE;
 			lval.lval_off  = s->sym_off;
 			lval.lval_ty   = mkptr(s->sym_ty->sty_base);
-			lval.lval_isconst   = 0;
+			lval.lval_isconst = 0;
+			lval.lval_isglob  = 0;
 			return;
 		}
 
 		lval.lval_kind = STACK;
 		lval.lval_off  = s->sym_off;
 		lval.lval_ty   = s->sym_ty;
-		lval.lval_isconst   = 0;
+		lval.lval_isconst = 0;
+		lval.lval_isglob  = 0;
 		load(lval);
 		return;
 	}
@@ -310,6 +456,7 @@ void factor(void)
 	lval.lval_kind   = NONE;
 	lval.lval_ty     = expr_ty->sty_kind == TYPTR ? defty : inferty(val);
 	lval.lval_isconst = 1;
+	lval.lval_isglob  = 0;
 	lval.lval_val    = val;
 }
 
@@ -455,6 +602,7 @@ void expr(int min_prec)
 			lval.lval_kind = NONE;
 			lval.lval_ty   = l.lval_ty;
 			lval.lval_isconst   = 0;
+			lval.lval_isglob    = 0;
 			continue;
 		}
 
@@ -467,6 +615,7 @@ void expr(int min_prec)
 			deptr(lval);
 			lval.lval_kind = NONE;
 			lval.lval_isconst   = 0;
+			lval.lval_isglob    = 0;
 		}
 
 		/*
@@ -479,6 +628,7 @@ void expr(int min_prec)
 			lhs_ty         = lval.lval_ty;
 			lval.lval_kind = lval.lval_off = NONE;
 			lval.lval_isconst   = 0;
+			lval.lval_isglob    = 0;
 
 			if (lhs_cst) {
 				/* a pending constant costs nothing to keep */
@@ -513,6 +663,7 @@ void expr(int min_prec)
 				} else {
 					printf("	pop %%rcx\n");
 					printf("	xchg %%rax, %%rcx\n");
+					lval.lval_isglob = 0;
 				}
 			}
 
@@ -538,6 +689,7 @@ void expr(int min_prec)
 void stmt(int mode)
 {
 	skipws();
+	curstmt = mode;
 
 	if (*curs == ';') {
 		/*
@@ -634,6 +786,16 @@ void prog(void)
 	skipws();
 
 	while (*curs != '\0') {
+		const struct keyword *kw = peekword();
+
+		/*
+		 * only declarations and function definitions may live at file
+		 * scope; an expression statement there is invalid C and would
+		 * become code no caller ever reaches.
+		 */
+		if (!kw || (kw->kw_func != doty && kw->kw_func != doextern))
+			error("expected a declaration at file scope");
+
 		stmt(STMT);
 		skipws();
 	}

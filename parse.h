@@ -14,6 +14,13 @@ extern struct symty *expr_ty;
  */
 extern int expr_rootop;
 
+/* set by the 'extern' keyword, consumed by the next declaration */
+extern int extdecl;
+
+/* the function being parsed: where 'return' jumps and what it may return */
+extern int           funcretlbl;
+extern struct symty *funcretty;
+
 void decl(struct symty *);
 void factor(void);
 void stmt(int);

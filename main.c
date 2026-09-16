@@ -1,7 +1,6 @@
 #include <stdio.h>
 
 #include "cc.h"
-#include "emit.h"
 #include "keywords.h"
 #include "parse.h"
 #include "util.h"
@@ -17,30 +16,16 @@ int main(int argc, char **argv)
 		return 1;
 	}
 
-	int setup;
-	int body;
-
 	line = curs = argv[1];
-	globl("main");
+	tyinit();
 
 	/*
-	 * the frame size is only known once the declarations have been
-	 * parsed, so the stack setup hangs off the end of the function.
+	 * every function now brings its own frame: 'main' must be declared
+	 * explicitly with a body for the program to be usable.
 	 */
-	setup = newlbl();
-	body  = newlbl();
-	beginframe(setup, body);
-
-	tyinit();
 	prog();
 
 	skipws();
 	if (*curs != '\0') error("unexpected trailing characters");
-
-	lbl(".L_ret_main");
-	epilogue();
-	ret();
-
-	endframe(setup, body, framesize());
 	return 0;
 }

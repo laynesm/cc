@@ -29,6 +29,7 @@ struct symty *sclty(int size, int sign)
 	ty->sty_kind   = TYSCALR;
 	ty->sty_size   = size;
 	ty->sty_signed = sign;
+	ty->sty_align  = size & -size;
 	return ty;
 }
 
@@ -38,6 +39,7 @@ struct symty *mkptr(struct symty *base)
 
 	ty->sty_kind = TYPTR;
 	ty->sty_size = 8;
+	ty->sty_align = 8;
 	ty->sty_base = base;
 	return ty;
 }
@@ -48,6 +50,7 @@ struct symty *mkarray(struct symty *base, int len)
 
 	ty->sty_kind  = TYARR;
 	ty->sty_size  = base->sty_size * len;
+	ty->sty_align = base->sty_align;
 	ty->sty_base  = base;
 	return ty;
 }
@@ -61,6 +64,13 @@ struct symty *mkfunc(struct symty *ret, struct fnsig *sig)
 	ty->sty_base  = ret;
 	ty->sty_sig   = sig;
 	return ty;
+}
+
+int symalign(struct symty *ty)
+{
+	if (ty->sty_align > 0) return ty->sty_align;
+	if (ty->sty_kind == TYARR) return symalign(ty->sty_base);
+	return 1;
 }
 
 int stysize(struct symty *ty)
@@ -90,6 +100,16 @@ int tyeq(struct symty *a, struct symty *b)
 		       a->sty_signed == b->sty_signed;
 	case TYPTR:
 		return tyeq(a->sty_base, b->sty_base);
+	case TYARR:
+		return a->sty_size == b->sty_size &&
+		       tyeq(a->sty_base, b->sty_base);
+	case TYFUNC:
+		if (!tyeq(a->sty_base, b->sty_base)) return 0;
+		if (a->sty_sig->fs_nargs != b->sty_sig->fs_nargs) return 0;
+		for (int i = 0; i < a->sty_sig->fs_nargs; ++i)
+			if (!tyeq(a->sty_sig->fs_args[i], b->sty_sig->fs_args[i]))
+				return 0;
+		return 1;
 	default:
 		return 0;
 	}

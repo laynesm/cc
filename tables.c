@@ -7,6 +7,7 @@
 #include "util.h"
 
 static struct symtab symtab = (struct symtab){0};
+static struct funtab funtab = (struct funtab){0};
 
 /*
  * next good steps here are:
@@ -32,6 +33,7 @@ const struct keyword kwtbl[] = {
 	[BREAK]      = {"break", BREAK, dobreak},
 	[CONTINUE]   = {"continue", CONTINUE, docontinue},
 	[GOTO]       = {"goto", GOTO, dogoto},
+	[EXTERN]     = {"extern", EXTERN, doextern},
 };
 
 /*
@@ -154,7 +156,7 @@ int framesize(void)
 	return -symtab.tab_stackoff;
 }
 
-struct sym *symadd(char *name, int scope, struct symty *ty)
+struct sym *symadd(char *name, int scope, struct symty *ty, int stcls)
 {
 	struct sym *s;
 	int         size = stysize(ty);
@@ -163,6 +165,16 @@ struct sym *symadd(char *name, int scope, struct symty *ty)
 	 * shouldn't ever happen
 	 */
 	if (scope == -1) panic("symadd called on negative scope");
+
+	/*
+	 * a file-scope object may be re-declared as long as the class and
+	 * the type agree ('int g; int g;', 'extern int g; int g;').
+	 */
+	if (stcls >= SCGLOB) {
+		s = symlookup(name, scope);
+		if (s && s->sym_stcls >= SCGLOB && tyeq(s->sym_ty, ty))
+			return s;
+	}
 
 	if (symlookup(name, scope)) error("symbol '%s' already declared", name);
 
@@ -178,13 +190,17 @@ struct sym *symadd(char *name, int scope, struct symty *ty)
 	s->sym_name[sizeof(s->sym_name) - 1] = '\0';
 
 	/*
-	 * a pointer should be sized on eight bytes always.
-	 * and the adresses should be aligned
+	 * only block-scope objects take frame space. globals and externs
+	 * live by their name, so they get no slot and no offset.
 	 */
-	symtab.tab_stackoff -= size;
-	s->sym_off = symtab.tab_stackoff;
+	s->sym_stcls = stcls;
+	s->sym_off   = 0;
+	if (stcls == SCLOCAL) {
+		symtab.tab_stackoff -= size;
+		s->sym_off = symtab.tab_stackoff;
 
-	if (size > 1) symtab.tab_stackoff &= ~(size - 1);
+		if (size > 1) symtab.tab_stackoff &= ~(size - 1);
+	}
 
 	s->sym_scope = scope;
 	s->sym_ty    = ty;
@@ -200,4 +216,48 @@ void symdrop(int scope)
 		if (symtab.tab_syms[i].sym_scope != scope) break;
 		symtab.tab_nsyms--;
 	}
+}
+
+int symsave(void)
+{
+	return symtab.tab_stackoff;
+}
+
+/*
+ * a function owns a fresh frame: its locals pile up on the shared
+ * stack-offset counter, so the counter is parked between functions.
+ */
+void symrestore(int off)
+{
+	symtab.tab_stackoff = off;
+}
+
+struct func *funclookup(const char *name)
+{
+	for (int i = funtab.tab_nfuncs - 1; i >= 0; --i)
+		if (strcmp(funtab.tab_funcs[i].func_name, name) == 0)
+			return &funtab.tab_funcs[i];
+
+	return NULL;
+}
+
+struct func *funcadd(const char *name, struct symty *ty, int defflag)
+{
+	struct func *f = funclookup(name);
+
+	if (f) {
+		if (!tyeq(f->func_ty, ty)) error("conflicting types for '%s'", name);
+		if (defflag && f->func_defined) error("redefinition of '%s'", name);
+		f->func_defined |= defflag;
+		return f;
+	}
+
+	if (funtab.tab_nfuncs >= FUNMAX) error("too many functions");
+
+	f = &funtab.tab_funcs[funtab.tab_nfuncs++];
+	strncpy(f->func_name, name, sizeof(f->func_name) - 1);
+	f->func_name[sizeof(f->func_name) - 1] = '\0';
+	f->func_ty      = ty;
+	f->func_defined = defflag;
+	return f;
 }

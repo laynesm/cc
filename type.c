@@ -184,7 +184,7 @@ static struct fnsig *fnpar(void)
 			error("'void' must be the only parameter");
 
 		if (declname[0])
-			symadd(declname, depth, pty);
+			symadd(declname, depth + 1, pty, SCLOCAL);
 
 		if (!isvoid) {
 			if (sig->fs_nargs == sig->fs_cap) {
