@@ -282,12 +282,13 @@ void materialize(struct lval *lv)
 
 void cast(struct symty *ty)
 {
-	static const char *const casttpl[2][9] = {
-		{ NULL, "movzbl %%al, %%eax", "movzwl %%ax, %%eax", NULL,
-		  "movl %%eax, %%eax", NULL, NULL, NULL, NULL },
-		{ NULL, "movsbl %%al, %%eax", "movswl %%ax, %%eax", NULL,
-		  "movslq %%eax, %%rax", NULL, NULL, NULL, NULL },
-	};
+/* printed through %s like every template, so registers carry one '%' */
+static const char *const casttpl[2][9] = {
+	{ NULL, "movzbl %al, %eax", "movzwl %ax, %eax", NULL,
+	  "movl %eax, %eax", NULL, NULL, NULL, NULL },
+	{ NULL, "movsbl %al, %eax", "movswl %ax, %eax", NULL,
+	  "movslq %eax, %rax", NULL, NULL, NULL, NULL },
+};
 
 	/* only the width matters: rax already holds the whole value */
 	if (ty->sty_kind != TYSCALR || !casttpl[ty->sty_signed][ty->sty_size])

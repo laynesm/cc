@@ -10,6 +10,7 @@
 #include "ident.h"
 #include "keywords.h"
 #include "parse.h"
+#include "type.h"
 #include "util.h"
 
 struct lval lval;
@@ -58,77 +59,27 @@ void decl(struct symty *ty)
 	int remaining = 0;
 
 	do {
-		struct sym     *s;
-		struct symty   *curty = ty;
-		char            name[SYMMAX];
-		int             dims[16];
-		int             ndims = 0;
-		int             parens = 0;
+		struct sym   *s;
+		struct symty *curty;
 
-		/*
-		 * without function declarators the parentheses of a declarator
-		 * are transparent: 'int *(*a);' is just 'int **a;'.
-		 * count opens, and close them after the array brackets.
-		 */
 		skipws();
-		while (*curs == '*' || *curs == '(') {
-			if (*curs == '*') {
-				curty = mkptr(curty);
-				advcurs(1);
-			} else {
-				parens++;
-				advcurs(1);
-			}
-		}
+		declname[0] = '\0';
+		curty = declarator(ty);
 
-		readident(name, sizeof(name));
+		if (declname[0] == '\0')
+			error("declaration without a name");
 
-		/*
-		 * 'int a[2][3]' declares an array of 2 arrays of 3 ints.
-		 * the bracket next to the name is the outer one, so the
-		 * dimensions wrap the base type from the innermost back.
-		 */
-		for (;;) {
-			char              *end;
-			unsigned long long len;
-
-			skipws();
-			if (*curs != '[') break;
-
-			advcurs(1);
-			errno = 0;
-			len   = strtoull(curs, &end, 0);
-			if (errno || end == curs || len == 0)
-				error("invalid array length");
-			curs = end;
-			if (ndims == countof(dims))
-				error("too many array dimensions");
-			dims[ndims++] = (int)len;
-
-			skipws();
-			if (*curs != ']') error("expected ']'");
-			advcurs(1);
-		}
-
-		for (int i = ndims - 1; i >= 0; --i)
-			curty = mkarray(curty, dims[i]);
-
-		s = symadd(name, depth, curty);
+		s = symadd(declname, depth, curty);
 
 		/*
 		 * a zero-sized type is the void type: it may only show up
-		 * behind a pointer ('void *'), never as a standalone object.
+		 * behind a pointer ('void *') or as a function result,
+		 * never as a standalone object.
 		 */
 		if (stysize(curty) == 0)
 			error("variable '%s' cannot be void", s->sym_name);
 
 		skipws();
-
-		while (parens-- > 0) {
-			skipws();
-			if (*curs != ')') error("unbalanced '(' in declarator");
-			advcurs(1);
-		}
 
 		remaining = 0;
 
@@ -266,10 +217,7 @@ void factor(void)
 			kw  = readword(buf, sizeof(buf));
 			cty = parsety(kw->kw_id);
 			skipws();
-			while (*curs == '*') {
-				cty = mkptr(cty);
-				advcurs(1);
-			}
+			cty = declarator(cty);
 			skipws();
 			if (*curs != ')') error("expected ')' after cast");
 			advcurs(1);

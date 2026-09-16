@@ -8,6 +8,7 @@
 #include "ident.h"
 #include "keywords.h"
 #include "parse.h"
+#include "type.h"
 #include "util.h"
 
 static int lblcnt = 0;
@@ -79,66 +80,13 @@ void dogoto(const struct keyword *)
 }
 
 /*
- * consumes the type keywords that follow an already-consumed first one
- * (given by 'first') and returns the type they describe. used by both
- * doty() (declarations) and the cast branch in parse.c: they share the
- * relation and sign rules, so a cast is just another direction of use.
+ * the first type keyword of a statement (statements are single-pass, so
+ * every type starts a declaration until proven otherwise). parsety()
+ * reads the whole type: doty only decides whether a declared name follows
+ * (that is a declaration) or not (a cast, not supported at statement
+ * level yet), then hands the base type to decl(), which parses the
+ * declarator against it.
  */
-struct symty *parsety(int first)
-{
-	char buf[KWMAX];
-	int   bits, longs, prio, size, sign, t;
-
-	bits  = first;
-	longs = (first == TYLONG);
-
-	skipws();
-	while (isalpha(*curs) || *curs == '_') {
-		int                   id;
-		const struct keyword *kw = peekword();
-
-		if (!kw) break;
-
-		/* the keyword table decides who is a type */
-		if (kw->kw_func != doty) error("unexpected keyword");
-
-		/* consume the peeked type keyword */
-		kw = readword(buf, sizeof(buf));
-		id = kw->kw_id;
-
-		/* the type table decides who relates to whom */
-		for (t = TYSIGNED; t <= TYVOID; t <<= 1)
-			if ((bits & t) && !(tytbl[t].ty_relate & id))
-				error("type '%s' does not relate to '%s'",
-				      kwtbl[t].kw_str, kw->kw_str);
-
-		if (id == TYLONG) {
-			if (longs == 2)
-				error("long long long is too much long");
-			longs++;
-		}
-
-		bits |= id;
-		skipws();
-	}
-
-	/* the winning type decides the size, the sign lives in the same data */
-	prio = -1;
-	size = 0;
-	for (t = TYSIGNED; t <= TYVOID; t <<= 1)
-		if ((bits & t) && tytbl[t].ty_prio > prio) {
-			prio = tytbl[t].ty_prio;
-			size = tytbl[t].ty_size;
-			sign = tytbl[t].ty_signed;
-		}
-
-	/* an explicit sign always beats the type default */
-	if (bits & TYSIGN)
-		sign = tytbl[bits & TYSIGNED ? TYSIGNED : TYUNSIGNED].ty_signed;
-
-	return sclty(size, sign);
-}
-
 void doty(const struct keyword *basety)
 {
 	struct symty *ty = parsety(basety->kw_id);

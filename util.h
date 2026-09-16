@@ -6,6 +6,7 @@
 struct symty *sclty(int, int);
 struct symty *mkptr(struct symty *);
 struct symty *mkarray(struct symty *, int);
+struct symty *mkfunc(struct symty *, struct fnsig *);
 struct symty *inferty(unsigned long long);
 
 void tyinit(void);

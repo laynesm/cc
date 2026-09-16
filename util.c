@@ -58,6 +58,19 @@ struct symty *mkarray(struct symty *base, int len)
 	return ty;
 }
 
+struct symty *mkfunc(struct symty *ret, struct fnsig *sig)
+{
+	struct symty *ty = newsy();
+
+	ty->sty_kind  = TYFUNC;
+	ty->sty_size  = 8;
+	ty->sty_align = 8;
+	ty->sty_base  = ret;
+	ty->sty_sig   = sig;
+	sig->fs_ret   = ret;
+	return ty;
+}
+
 int stysize(struct symty *ty)
 {
 	return ty->sty_kind == TYPTR || ty->sty_kind == TYFUNC
