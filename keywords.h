@@ -3,16 +3,16 @@
 
 int newlbl(void);
 
-void dogoto(struct keyword *);
-void doignored(struct keyword *);
-void doty(struct keyword *);
-void doif(struct keyword *);
-void doelse(struct keyword *);
-void doreturn(struct keyword *);
-void dowhile(struct keyword *);
-void dofor(struct keyword *);
-void dodowhile(struct keyword *);
-void dobreak(struct keyword *);
-void docontinue(struct keyword *);
+void dogoto(const struct keyword *);
+void doignored(const struct keyword *);
+void doty(const struct keyword *);
+void doif(const struct keyword *);
+void doelse(const struct keyword *);
+void doreturn(const struct keyword *);
+void dowhile(const struct keyword *);
+void dofor(const struct keyword *);
+void dodowhile(const struct keyword *);
+void dobreak(const struct keyword *);
+void docontinue(const struct keyword *);
 
 #endif

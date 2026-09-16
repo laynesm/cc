@@ -62,9 +62,9 @@ static int parse_cond(const char *father)
 	return false_lbl;
 }
 
-void doignored(struct keyword *) {}
+void doignored(const struct keyword *) {}
 
-void dogoto(struct keyword *)
+void dogoto(const struct keyword *)
 {
 	char name[1024];
 	skipws();
@@ -106,12 +106,10 @@ struct symty *parsety(int first)
 		id = kw->kw_id;
 
 		/* the type table decides who relates to whom */
-		for (t = TYSIGNED; t <= TYVOID; t <<= 1) {
-			if ((bits & t) == 0 || (tytbl[t].ty_relate & id) != 0)
-				continue;
-			error("type '%s' does not relate to '%s'",
-			      kwtbl[t].kw_str, kw->kw_str);
-		}
+		for (t = TYSIGNED; t <= TYVOID; t <<= 1)
+			if ((bits & t) && !(tytbl[t].ty_relate & id))
+				error("type '%s' does not relate to '%s'",
+				      kwtbl[t].kw_str, kw->kw_str);
 
 		if (id == TYLONG) {
 			if (longs == 2)
@@ -126,24 +124,21 @@ struct symty *parsety(int first)
 	/* the winning type decides the size, the sign lives in the same data */
 	prio = -1;
 	size = 0;
-	for (t = TYSIGNED; t <= TYVOID; t <<= 1) {
-		if ((bits & t) == 0 || tytbl[t].ty_prio <= prio) continue;
-		prio = tytbl[t].ty_prio;
-		size = tytbl[t].ty_size;
-		sign = tytbl[t].ty_signed;
-	}
+	for (t = TYSIGNED; t <= TYVOID; t <<= 1)
+		if ((bits & t) && tytbl[t].ty_prio > prio) {
+			prio = tytbl[t].ty_prio;
+			size = tytbl[t].ty_size;
+			sign = tytbl[t].ty_signed;
+		}
 
 	/* an explicit sign always beats the type default */
-	if (bits & TYSIGNED) {
-		sign = tytbl[TYSIGNED].ty_signed;
-	} else if (bits & TYUNSIGNED) {
-		sign = tytbl[TYUNSIGNED].ty_signed;
-	}
+	if (bits & TYSIGN)
+		sign = tytbl[bits & TYSIGNED ? TYSIGNED : TYUNSIGNED].ty_signed;
 
 	return sclty(size, sign);
 }
 
-void doty(struct keyword *basety)
+void doty(const struct keyword *basety)
 {
 	struct symty *ty = parsety(basety->kw_id);
 	char         *savcurs;
@@ -173,14 +168,14 @@ void doty(struct keyword *basety)
 	advcurs(1);
 }
 
-void doreturn(struct keyword *)
+void doreturn(const struct keyword *)
 {
 	expr_ty = defty;
 	expr(0);
 	jmp(".L_ret_main");
 }
 
-void doif(struct keyword *)
+void doif(const struct keyword *)
 {
 	int false_lbl = parse_cond("if");
 
@@ -208,7 +203,7 @@ void doif(struct keyword *)
 	idlbl(false_lbl);
 }
 
-void dowhile(struct keyword *)
+void dowhile(const struct keyword *)
 {
 	int start_lbl = newlbl();
 	int false_lbl;
@@ -228,7 +223,7 @@ void dowhile(struct keyword *)
 	looppop();
 }
 
-void dofor(struct keyword *)
+void dofor(const struct keyword *)
 {
 	int   cond_lbl, end_lbl, cont_lbl;
 	char *post_start, *post_end, *body_end;
@@ -262,10 +257,7 @@ void dofor(struct keyword *)
 
 	post_start = curs;
 	while ((*curs != ')' || parens > 0) && *curs != '\0') {
-		if (*curs == '(')
-			parens++;
-		else if (*curs == ')')
-			parens--;
+		parens += *curs == '(' ? 1 : *curs == ')' ? -1 : 0;
 		curs++;
 	}
 
@@ -297,7 +289,7 @@ void dofor(struct keyword *)
 	symdrop(depth);
 }
 
-void dodowhile(struct keyword *)
+void dodowhile(const struct keyword *)
 {
 	int start_lbl = newlbl();
 	int cont_lbl  = newlbl();
@@ -338,12 +330,12 @@ void dodowhile(struct keyword *)
 	looppop();
 }
 
-void doelse(struct keyword *)
+void doelse(const struct keyword *)
 {
 	error("orphan else");
 }
 
-void dobreak(struct keyword *)
+void dobreak(const struct keyword *)
 {
 	if (looppos == 0) error("break outside of a loop");
 
@@ -354,7 +346,7 @@ void dobreak(struct keyword *)
 	jmplbl(brklbl[looppos - 1]);
 }
 
-void docontinue(struct keyword *)
+void docontinue(const struct keyword *)
 {
 	if (looppos == 0) error("continue outside of a loop");
 

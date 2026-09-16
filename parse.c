@@ -226,18 +226,18 @@ void factor(void)
 			lval.lval_off  = NONE;
 			lval.lval_ty   = l.lval_ty;
 
-			un->un_emit(l);
+			runemit(un->un_emit, un->un_tpl, l);
 			return;
 		}
 
-		un->un_emit(lval);
+		runemit(un->un_emit, un->un_tpl, lval);
 		return;
 	}
 
 	if (*curs == '(') {
 		const struct keyword *kw;
 		struct symty         *cty;
-		const char           *savcurs = curs;
+		char                 *savcurs = curs;
 
 		advcurs(1);
 		kw = peekword();
@@ -305,22 +305,14 @@ void factor(void)
 
 	errno = 0;
 	if (*curs == '0') {
-		base = -1;
+		char c = tolower(curs[1]);
 
-		switch (tolower(curs[1])) {
-		case 'x': base = 16; break;
-		case 'd': base = 10; break;
-		case 'b': base = 2; break;
-		case 'o': base = 8; break;
-		default: break;
-		}
+		base = c == 'x' ? 16 : c == 'd' ? 10 : c == 'b' ? 2 : c == 'o' ? 8 : 8;
 
-		if (base != -1) {
+		if (c == 'x' || c == 'd' || c == 'b' || c == 'o') {
 			if (!isdigit(curs[2])) error("incomplete literal");
 			curs += 2;
 		}
-
-		if (base == -1) base = 8;
 	} else {
 		base = 10;
 	}
@@ -342,16 +334,17 @@ void pointarith(const struct operator *op, struct symty *lhsty, struct symty *rh
 	int islhsptr = lhsty->sty_kind == TYPTR;
 	int isrhsptr = rhsty->sty_kind == TYPTR;
 
+	/* the two pointer flags add up to a single case number */
+	if (islhsptr + isrhsptr == 2) error("both operands are pointers");
+	if (islhsptr + isrhsptr == 0) return;
+	if (iscompound && isrhsptr && !islhsptr)
+		error("assignment makes integer from pointer without a cast");
+	if (op->op_ptr == NOPTR)
+		error("invalid pointer operation");
+
 	struct symty *ptrty = islhsptr ? lhsty : rhsty;
 	const char   *reg   = islhsptr && !iscompound ? "%rcx" : "%rax";
 	int           sz    = ptrstep(ptrty);
-
-	if (islhsptr && isrhsptr) error("both operands are pointers");
-	if (!islhsptr && !isrhsptr) return;
-	if (iscompound && isrhsptr && !islhsptr) error("assignment makes integer from pointer without a cast");
-
-	if (op->op_ptr == NOPTR)
-		error("invalid pointer operation");
 
 	if (isrhsptr) *lhsty = *rhsty;
 	if (sz > 1) printf("	imul $%d, %s\n", sz, reg);
@@ -411,7 +404,7 @@ void expr(int min_prec)
 				if (op->op_assign != ASTORE) pointarith(op, l.lval_ty, lval.lval_ty, 1);
 			}
 
-			op->op_emit(l);
+			runemit(op->op_emit, op->op_tpl, l);
 
 			lval.lval_kind = NONE;
 			lval.lval_ty   = l.lval_ty;
@@ -445,7 +438,7 @@ void expr(int min_prec)
 			pointarith(op, lhs_ty, lval.lval_ty, 0);
 
 		lval.lval_ty = lhs_ty;
-		op->op_emit(lval);
+		runemit(op->op_emit, op->op_tpl, lval);
 	}
 
 	if (lval.lval_kind == REGIS) {
@@ -496,7 +489,7 @@ void stmt(int mode)
 
 	if (isalpha(*curs) || curs[0] == '_' || curs[0] == '$') {
 		char name[1024];
-		const char *savcurs      = curs;
+		char              *savcurs      = curs;
 		const struct keyword *kw = readword(name, sizeof(name));
 
 		if (kw) {

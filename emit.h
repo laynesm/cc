@@ -15,6 +15,47 @@ struct lval {
 
 extern struct lval lval;
 
+/*
+ * assembly templates. only printed through emit() (fputs), so the strings
+ * carry bare register names: '%rax', not printf's '%%rax'.
+ */
+#define EMITNOP  ""
+#define EMITADD  "\tadd %rcx, %rax\n"
+#define EMITSUB  "\tsub %rcx, %rax\n"
+#define EMITMUL  "\timul %rcx, %rax\n"
+#define EMITIDIV "\tcqo\n\tidiv %rcx\n"
+#define EMITREM  "\tcqo\n\tidiv %rcx\n\tmov %rdx, %rax\n"
+#define EMITBAND "\tand %rcx, %rax\n"
+#define EMITBOR  "\tor %rcx, %rax\n"
+#define EMITBXOR "\txor %rcx, %rax\n"
+#define EMITBSHL "\tshl %cl, %rax\n"
+#define EMITBSHR "\tshr %cl, %rax\n"
+#define EMITNEG  "\tneg %rax\n"
+#define EMITBNOT "\tnot %rax\n"
+
+/* the six comparisons differ by their setcc suffix alone */
+#define EMITSET(cc) \
+	"\tcmp %rcx, %rax\n\tset" cc " %al\n\tmovzbq %al, %rax\n"
+#define EMITEQ  EMITSET("e")
+#define EMITNE  EMITSET("ne")
+#define EMITLT  EMITSET("l")
+#define EMITGT  EMITSET("g")
+#define EMITLE  EMITSET("le")
+#define EMITGE  EMITSET("ge")
+
+#define EMITLNOT "\tcmp $0, %rax\n\tsete %al\n\tmovzbq %al, %rax\n"
+
+/* the boolean ops share the not-materialization, differ by the last step */
+#define EMITLOGIC(op)                                                        \
+	"\ttest %rax,%rax\n\tsetne %al\n\tmovzbq %al,%rax\n"                 \
+	"\ttest %rcx,%rcx\n\tsetne %cl\n\tmovzbq %cl,%rcx\n"                 \
+	"\t" op " %rcx,%rax\n"
+#define EMITAND EMITLOGIC("and")
+#define EMITOR  EMITLOGIC("or")
+
+void emit(const char *);
+void runemit(void (*)(struct lval), const char *, struct lval);
+
 void regispre(void);
 void regispost(void);
 
@@ -24,23 +65,11 @@ void ptr(struct lval);
 void inc(struct lval);
 void dec(struct lval);
 
-void and(struct lval);
-void or(struct lval);
-
-void band(struct lval);
-void bor(struct lval);
-void bxor(struct lval);
-void bshl(struct lval);
-void bshr(struct lval);
-
 void bandeq(struct lval);
 void boreq(struct lval);
 void bxoreq(struct lval);
 void bshleq(struct lval);
 void bshreq(struct lval);
-
-void preinc(struct lval);
-void predec(struct lval);
 
 void addeq(struct lval);
 void subeq(struct lval);
@@ -60,25 +89,10 @@ void endframe(int, int, int);
 void epilogue(void);
 void load(struct lval);
 void store(struct lval);
-void eq(struct lval);
-void ne(struct lval);
-void lt(struct lval);
-void gt(struct lval);
-void le(struct lval);
-void ge(struct lval);
-void neg(struct lval);
 void lbl(const char *);
 void globl(const char *);
 void retval(unsigned long long);
 void ret(void);
-void add(struct lval);
-void sub(struct lval);
-void idiv(struct lval);
-void mul(struct lval);
-void rem(struct lval);
-void bnot(struct lval);
-void lnot(struct lval);
-void pos(struct lval);
 void cast(struct symty *);
 
 #endif

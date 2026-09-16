@@ -134,12 +134,13 @@ struct operator {
 	int    op_assign;
 	int    op_postfix;
 	void (*op_emit)(struct lval);
+	const char *op_tpl;
 };
 
 struct keyword {
 	const char *kw_str;
 	int         kw_id;
-	void      (*kw_func)(struct keyword *);
+	void      (*kw_func)(const struct keyword *);
 };
 
 struct unary {
@@ -150,6 +151,7 @@ struct unary {
 	int    un_ptr;
 	int    un_assign;
 	void (*un_emit)(struct lval);
+	const char *un_tpl;
 };
 
 /* runtime type kinds */

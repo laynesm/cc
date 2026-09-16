@@ -5,45 +5,32 @@
 #include "parse.h"
 #include "util.h"
 
+/*
+ * load/store templates, indexed [sign][size] and [size]: sizes are 1, 2, 4
+ * and 8 bytes so they land in the middle of the table, holes stay NULL.
+ */
+static const char *const ldtpl[2][9] = {
+	{ NULL, "\tmovzbq %d(%s), %%rax\n", "\tmovzwq %d(%s), %%rax\n", NULL,
+	  "\tmovl %d(%s), %%eax\n", NULL, NULL, NULL, "\tmov %d(%s), %%rax\n" },
+	{ NULL, "\tmovsbq %d(%s), %%rax\n", "\tmovswq %d(%s), %%rax\n", NULL,
+	  "\tmovslq %d(%s), %%rax\n", NULL, NULL, NULL, "\tmov %d(%s), %%rax\n" },
+};
+
 static void load_mem(int off, const char *from, int size, int sign)
 {
-	switch (size) {
-	case 1:
-		printf("	mov%cbq %d(%s), %%rax\n", sign ? 's' : 'z', off, from);
-		break;
-	case 2:
-		printf("	mov%cwq %d(%s), %%rax\n", sign ? 's' : 'z', off, from);
-		break;
-	case 4:
-		printf("	%s %d(%s), %s\n", sign ? "movslq" : "movl",
-		       off, from, sign ? "%rax" : "%eax");
-		break;
-	case 8:
-		printf("	mov %d(%s), %%rax\n", off, from);
-		break;
-	default:
-		error("not yet implemented - load");
-	}
+	if (!ldtpl[sign][size]) error("not yet implemented - load");
+	printf(ldtpl[sign][size], off, from);
 }
+
+static const char *const sttpl[9] = {
+	NULL, "\tmovb %%al, %d(%s)\n", "\tmovw %%ax, %d(%s)\n", NULL,
+	"\tmovl %%eax, %d(%s)\n", NULL, NULL, NULL, "\tmovq %%rax, %d(%s)\n",
+};
 
 static void store_mem(int off, const char *to, int size)
 {
-	switch (size) {
-	case 1:
-		printf("	movb %%al, %d(%s)\n", off, to);
-		break;
-	case 2:
-		printf("	movw %%ax, %d(%s)\n", off, to);
-		break;
-	case 4:
-		printf("	movl %%eax, %d(%s)\n", off, to);
-		break;
-	case 8:
-		printf("	movq %%rax, %d(%s)\n", off, to);
-		break;
-	default:
-		error("not implemented yet - store");
-	}
+	if (!sttpl[size]) error("not implemented yet - store");
+	printf(sttpl[size], off, to);
 }
 
 static void someq(struct lval l, const char *inst, const char *outreg)
@@ -116,6 +103,7 @@ void bshreq(struct lval l)
 
 void idx(struct lval l)
 {
+	(void)l;
 	skipws();
 	if (*curs != ']') error("expected ']'");
 	advcurs(1);
@@ -133,22 +121,6 @@ void idx(struct lval l)
 	 */
 	if (lval.lval_ty->sty_kind == TYARR)
 		lval.lval_ty = mkptr(lval.lval_ty->sty_base);
-}
-
-void preinc(struct lval l)
-{
-	int sz = ptrstep(l.lval_ty);
-
-	printf("	add $%d, %%rax\n", sz);
-	store(l);
-}
-
-void predec(struct lval l)
-{
-	int sz = ptrstep(l.lval_ty);
-
-	printf("	sub $%d, %%rax\n", sz);
-	store(l);
 }
 
 void inc(struct lval l)
@@ -286,80 +258,33 @@ void globl(const char *s)
 	lbl(s);
 }
 
-void eq(struct lval)
+/*
+ * the fixed-string templates from the operator/unary tables go out raw;
+ * anything needing a live lvalue uses its emitter function instead.
+ */
+void emit(const char *s)
 {
-	printf("	cmp %%rcx, %%rax\n	sete %%al\n	movzbq %%al, "
-	       "%%rax\n");
+	fputs(s, stdout);
 }
 
-void ne(struct lval)
+void runemit(void (*fn)(struct lval), const char *tpl, struct lval l)
 {
-	printf("	cmp %%rcx, %%rax\n	setne %%al\n	movzbq %%al, "
-	       "%%rax\n");
-}
-
-void lt(struct lval)
-{
-	printf("	cmp %%rcx, %%rax\n	setl %%al\n	movzbq %%al, "
-	       "%%rax\n");
-}
-
-void gt(struct lval)
-{
-	printf("	cmp %%rcx, %%rax\n	setg %%al\n	movzbq %%al, "
-	       "%%rax\n");
-}
-
-void le(struct lval)
-{
-	printf("	cmp %%rcx, %%rax\n	setle %%al\n	movzbq %%al, "
-	       "%%rax\n");
-}
-
-void ge(struct lval)
-{
-	printf("	cmp %%rcx, %%rax\n	setge %%al\n	movzbq %%al, "
-	       "%%rax\n");
-}
-
-void pos(struct lval) {}
-
-void bnot(struct lval)
-{
-	printf("	not %%rax\n");
-}
-
-void lnot(struct lval)
-{
-	printf("	cmp $0, %%rax\n");
-	printf("	sete %%al\n");
-	printf("	movzbq %%al, %%rax\n");
-}
-
-void neg(struct lval)
-{
-	printf("	neg %%rax\n");
+	if (fn) fn(l); else emit(tpl);
 }
 
 void cast(struct symty *ty)
 {
-	/* only the width matters: rax already holds the whole value */
-	if (ty->sty_kind != TYSCALR) return;
+	static const char *const casttpl[2][9] = {
+		{ NULL, "movzbl %%al, %%eax", "movzwl %%ax, %%eax", NULL,
+		  "movl %%eax, %%eax", NULL, NULL, NULL, NULL },
+		{ NULL, "movsbl %%al, %%eax", "movswl %%ax, %%eax", NULL,
+		  "movslq %%eax, %%rax", NULL, NULL, NULL, NULL },
+	};
 
-	switch (ty->sty_size) {
-	case 1:
-		printf("	mov%cb %%al, %%eax\n", ty->sty_signed ? 's' : 'z');
-		break;
-	case 2:
-		printf("	mov%cw %%ax, %%eax\n", ty->sty_signed ? 's' : 'z');
-		break;
-	case 4:
-		printf("	%s %%eax, %s\n", ty->sty_signed ? "movslq" : "movl",
-		       ty->sty_signed ? "%rax" : "%eax");
-		break;
-	default:
-		break;
-	}
+	/* only the width matters: rax already holds the whole value */
+	if (ty->sty_kind != TYSCALR || !casttpl[ty->sty_signed][ty->sty_size])
+		return;
+	printf("	%s\n", casttpl[ty->sty_signed][ty->sty_size]);
 }
 
 void retval(unsigned long long val)
@@ -370,76 +295,4 @@ void retval(unsigned long long val)
 void ret(void)
 {
 	printf("	ret\n");
-}
-
-void add(struct lval)
-{
-	printf("	add %%rcx, %%rax\n");
-}
-
-void sub(struct lval)
-{
-	printf("	sub %%rcx, %%rax\n");
-}
-
-void mul(struct lval)
-{
-	printf("	imul %%rcx, %%rax\n");
-}
-
-void idiv(struct lval)
-{
-	printf("	cqo\n	idiv %%rcx\n");
-}
-
-void rem(struct lval)
-{
-	printf("	cqo\n	idiv %%rcx\n	mov %%rdx, %%rax\n");
-}
-
-void and(struct lval)
-{
-	printf("	test %%rax,%%rax\n");
-	printf("	setne %%al\n");
-	printf("	movzbq %%al,%%rax\n");
-	printf("	test %%rcx,%%rcx\n");
-	printf("	setne %%cl\n");
-	printf("	movzbq %%cl,%%rcx\n");
-	printf("	and %%rcx,%%rax\n");
-}
-
-void or(struct lval)
-{
-	printf("	test %%rax,%%rax\n");
-	printf("	setne %%al\n");
-	printf("	movzbq %%al,%%rax\n");
-	printf("	test %%rcx,%%rcx\n");
-	printf("	setne %%cl\n");
-	printf("	movzbq %%cl,%%rcx\n");
-	printf("	or %%rcx,%%rax\n");
-}
-
-void band(struct lval)
-{
-	printf("	and %%rcx, %%rax\n");
-}
-
-void bor(struct lval)
-{
-	printf("	or %%rcx, %%rax\n");
-}
-
-void bxor(struct lval)
-{
-	printf("	xor %%rcx, %%rax\n");
-}
-
-void bshl(struct lval)
-{
-	printf("	shl %%cl, %%rax\n");
-}
-
-void bshr(struct lval)
-{
-	printf("	shr %%cl, %%rax\n");
 }

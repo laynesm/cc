@@ -38,39 +38,43 @@ const struct keyword kwtbl[] = {
  * Probably '=' should be a operator too.
  * it is already. am i dummy?
  */
+/*
+ * fixed-asm operators carry a template (op_tpl), printed by emit().
+ * operators that need the live lvalue keep an emitter function (op_emit).
+ */
 const struct operator optbl[OPNUM] = {
-	[OPSHLEQ]  = {"<<=", 3, -1, OPASSOCR, NOPTR,   ASCOMP, 0, bshleq},
-	[OPSHREQ]  = {">>=", 3, -1, OPASSOCR, NOPTR,   ASCOMP, 0, bshreq},
-	[OPEQ]     = {"==", 2, 0, OPASSOCL, PTRNONE,   ASNONE, 0, eq},
-	[OPNEQ]    = {"!=", 2, 0, OPASSOCL, PTRNONE,   ASNONE, 0, ne},
-	[OPLE]     = {"<=", 2, 1, OPASSOCL, PTRNONE,   ASNONE, 0, le},
-	[OPGE]     = {">=", 2, 1, OPASSOCL, PTRNONE,   ASNONE, 0, ge},
-	[OPSHL]    = {"<<", 2, 1, OPASSOCL, NOPTR,     ASNONE, 0, bshl},
-	[OPSHR]    = {">>", 2, 1, OPASSOCL, NOPTR,     ASNONE, 0, bshr},
-	[OPADDEQ]  = {"+=", 2, -1, OPASSOCR, PTRARITH, ASCOMP, 0, addeq},
-	[OPSUBEQ]  = {"-=", 2, -1, OPASSOCR, PTRARITH, ASCOMP, 0, subeq},
-	[OPMULEQ]  = {"*=", 2, -1, OPASSOCR, NOPTR,    ASCOMP, 0, muleq},
-	[OPDIVEQ]  = {"/=", 2, -1, OPASSOCR, NOPTR,    ASCOMP, 0, diveq},
-	[OPREMEQ]  = {"%=", 2, -1, OPASSOCR, NOPTR,    ASCOMP, 0, remeq},
-	[OPINC]    = {"++", 2, -1, OPASSOCR, PTRARITH, ASMOD, 0, inc},
-	[OPDEC]    = {"--", 2, -1, OPASSOCR, PTRARITH, ASMOD, 0, dec},
-	[OPAND]    = {"&&", 2,  1, OPASSOCL, PTRNONE,  ASNONE, 0, and},
-	[OPOR]     = {"||", 2,  1, OPASSOCL, PTRNONE,  ASNONE, 0, or},
-	[OPBANDEQ] = {"&=", 2, -1, OPASSOCR, NOPTR,    ASCOMP, 0, bandeq},
-	[OPBOREQ]  = {"|=", 2, -1, OPASSOCR, NOPTR,    ASCOMP, 0, boreq},
-	[OPXOREQ]  = {"^=", 2, -1, OPASSOCR, NOPTR,    ASCOMP, 0, bxoreq},
-	[OPLT]     = {"<",  1, 1, OPASSOCL, PTRNONE,   ASNONE, 0, lt},
-	[OPGT]     = {">",  1, 1, OPASSOCL, PTRNONE,   ASNONE, 0, gt},
-	[OPADD]    = {"+",  1, 0, OPASSOCL, PTRARITH,  ASNONE, 0, add},
-	[OPSUB]    = {"-",  1, 0, OPASSOCL, PTRARITH,  ASNONE, 0, sub},
-	[OPMUL]    = {"*",  1, 1, OPASSOCL, NOPTR,     ASNONE, 0, mul},
-	[OPDIV]    = {"/",  1, 1, OPASSOCL, NOPTR,     ASNONE, 0, idiv},
-	[OPREM]    = {"%",  1, 1, OPASSOCL, NOPTR,     ASNONE, 0, rem},
-	[OPASSIGN] = {"=",  1, -1, OPASSOCR, PTRNONE,  ASTORE, 0, store},
-	[OPIDX]    = {"[",  1, 2, OPASSOCL, PTRARITH,  ASNONE, 1, idx},
-	[OPBAND]   = {"&",  1,  1, OPASSOCL, NOPTR,    ASNONE, 0, band},
-	[OPBOR]    = {"|",  1,  1, OPASSOCL, NOPTR,    ASNONE, 0, bor},
-	[OPXOR]    = {"^",  1,  1, OPASSOCL, NOPTR,    ASNONE, 0, bxor},
+	[OPSHLEQ]  = {"<<=", 3, -1, OPASSOCR, NOPTR,   ASCOMP, 0, bshleq, NULL},
+	[OPSHREQ]  = {">>=", 3, -1, OPASSOCR, NOPTR,   ASCOMP, 0, bshreq, NULL},
+	[OPEQ]     = {"==", 2, 0, OPASSOCL, PTRNONE,   ASNONE, 0, NULL, EMITEQ},
+	[OPNEQ]    = {"!=", 2, 0, OPASSOCL, PTRNONE,   ASNONE, 0, NULL, EMITNE},
+	[OPLE]     = {"<=", 2, 1, OPASSOCL, PTRNONE,   ASNONE, 0, NULL, EMITLE},
+	[OPGE]     = {">=", 2, 1, OPASSOCL, PTRNONE,   ASNONE, 0, NULL, EMITGE},
+	[OPSHL]    = {"<<", 2, 1, OPASSOCL, NOPTR,     ASNONE, 0, NULL, EMITBSHL},
+	[OPSHR]    = {">>", 2, 1, OPASSOCL, NOPTR,     ASNONE, 0, NULL, EMITBSHR},
+	[OPADDEQ]  = {"+=", 2, -1, OPASSOCR, PTRARITH, ASCOMP, 0, addeq, NULL},
+	[OPSUBEQ]  = {"-=", 2, -1, OPASSOCR, PTRARITH, ASCOMP, 0, subeq, NULL},
+	[OPMULEQ]  = {"*=", 2, -1, OPASSOCR, NOPTR,    ASCOMP, 0, muleq, NULL},
+	[OPDIVEQ]  = {"/=", 2, -1, OPASSOCR, NOPTR,    ASCOMP, 0, diveq, NULL},
+	[OPREMEQ]  = {"%=", 2, -1, OPASSOCR, NOPTR,    ASCOMP, 0, remeq, NULL},
+	[OPINC]    = {"++", 2, -1, OPASSOCR, PTRARITH, ASMOD, 0, inc, NULL},
+	[OPDEC]    = {"--", 2, -1, OPASSOCR, PTRARITH, ASMOD, 0, dec, NULL},
+	[OPAND]    = {"&&", 2,  1, OPASSOCL, PTRNONE,  ASNONE, 0, NULL, EMITAND},
+	[OPOR]     = {"||", 2,  1, OPASSOCL, PTRNONE,  ASNONE, 0, NULL, EMITOR},
+	[OPBANDEQ] = {"&=", 2, -1, OPASSOCR, NOPTR,    ASCOMP, 0, bandeq, NULL},
+	[OPBOREQ]  = {"|=", 2, -1, OPASSOCR, NOPTR,    ASCOMP, 0, boreq, NULL},
+	[OPXOREQ]  = {"^=", 2, -1, OPASSOCR, NOPTR,    ASCOMP, 0, bxoreq, NULL},
+	[OPLT]     = {"<",  1, 1, OPASSOCL, PTRNONE,   ASNONE, 0, NULL, EMITLT},
+	[OPGT]     = {">",  1, 1, OPASSOCL, PTRNONE,   ASNONE, 0, NULL, EMITGT},
+	[OPADD]    = {"+",  1, 0, OPASSOCL, PTRARITH,  ASNONE, 0, NULL, EMITADD},
+	[OPSUB]    = {"-",  1, 0, OPASSOCL, PTRARITH,  ASNONE, 0, NULL, EMITSUB},
+	[OPMUL]    = {"*",  1, 1, OPASSOCL, NOPTR,     ASNONE, 0, NULL, EMITMUL},
+	[OPDIV]    = {"/",  1, 1, OPASSOCL, NOPTR,     ASNONE, 0, NULL, EMITIDIV},
+	[OPREM]    = {"%",  1, 1, OPASSOCL, NOPTR,     ASNONE, 0, NULL, EMITREM},
+	[OPASSIGN] = {"=",  1, -1, OPASSOCR, PTRNONE,  ASTORE, 0, store, NULL},
+	[OPIDX]    = {"[",  1, 2, OPASSOCL, PTRARITH,  ASNONE, 1, idx, NULL},
+	[OPBAND]   = {"&",  1,  1, OPASSOCL, NOPTR,    ASNONE, 0, NULL, EMITBAND},
+	[OPBOR]    = {"|",  1,  1, OPASSOCL, NOPTR,    ASNONE, 0, NULL, EMITBOR},
+	[OPXOR]    = {"^",  1,  1, OPASSOCL, NOPTR,    ASNONE, 0, NULL, EMITBXOR},
 };
 
 /*
@@ -78,14 +82,14 @@ const struct operator optbl[OPNUM] = {
  * They should have association type too.
  */
 const struct unary untbl[] = {
-	{"++", 2, OPASSOCR, STACK, PTRARITH, ASNONE, preinc}, /* before '+' */
-	{"--", 2, OPASSOCR, STACK, PTRARITH, ASNONE, predec},
-	{"+",  1, OPASSOCL, NONE,  PTRNONE,  ASNONE, pos},
-	{"-",  1, OPASSOCL, NONE,  PTRNONE,  ASNONE, neg},
-	{"~",  1, OPASSOCL, NONE,  PTRNONE,  ASNONE, bnot},
-	{"!",  1, OPASSOCL, NONE,  PTRNONE,  ASNONE, lnot},
-	{"*",  1, OPASSOCR, REGIS, DEPTR,    ASNONE, pos}, /* ignored we lead with it using REGIS */
-	{"&",  1, OPASSOCR, NONE,  GENPTR,   ASNONE, ptr},
+	{"++", 2, OPASSOCR, STACK, PTRARITH, ASNONE, inc,  NULL},
+	{"--", 2, OPASSOCR, STACK, PTRARITH, ASNONE, dec,  NULL},
+	{"+",  1, OPASSOCL, NONE,  PTRNONE,  ASNONE, NULL, EMITNOP},
+	{"-",  1, OPASSOCL, NONE,  PTRNONE,  ASNONE, NULL, EMITNEG},
+	{"~",  1, OPASSOCL, NONE,  PTRNONE,  ASNONE, NULL, EMITBNOT},
+	{"!",  1, OPASSOCL, NONE,  PTRNONE,  ASNONE, NULL, EMITLNOT},
+	{"*",  1, OPASSOCR, REGIS, DEPTR,    ASNONE, NULL, EMITNOP}, /* ignored, lead with REGIS */
+	{"&",  1, OPASSOCR, NONE,  GENPTR,   ASNONE, ptr,  NULL},
 };
 
 /*
@@ -106,10 +110,9 @@ const struct type tytbl[] = {
 
 const struct keyword *kwlookup(const char *name)
 {
-	for (size_t i = 0; i < countof(kwtbl); ++i) {
+	for (int i = 0; i < (int)countof(kwtbl); ++i)
 		if ((i == kwtbl[i].kw_id) && strcmp(kwtbl[i].kw_str, name) == 0)
 			return &kwtbl[i];
-	}
 
 	return NULL;
 }

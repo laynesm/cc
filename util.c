@@ -60,14 +60,14 @@ struct symty *mkarray(struct symty *base, int len)
 
 int stysize(struct symty *ty)
 {
-	if (ty->sty_kind == TYPTR || ty->sty_kind == TYFUNC) return 8;
-	return ty->sty_size;
+	return ty->sty_kind == TYPTR || ty->sty_kind == TYFUNC
+		       ? 8
+		       : ty->sty_size;
 }
 
 int ptrstep(struct symty *ty)
 {
-	if (ty->sty_kind == TYPTR) return ty->sty_base->sty_size;
-	return 1;
+	return ty->sty_kind == TYPTR ? ty->sty_base->sty_size : 1;
 }
 
 /*
@@ -92,22 +92,14 @@ int tyeq(struct symty *a, struct symty *b)
 
 struct symty *inferty(unsigned long long val)
 {
-	if (val <= 127)
-		return sclty(1, 1);
-	if (val <= 255)
-		return sclty(1, 0);
-	if (val <= 32767)
-		return sclty(2, 1);
-	if (val <= 65535)
-		return sclty(2, 0);
-	if (val <= 2147483647)
-		return sclty(4, 1);
-	if (val <= 4294967295ULL)
-		return sclty(4, 0);
-	if (val <= 9223372036854775807ULL)
-		return sclty(8, 1);
-
-	return sclty(8, 0);
+	return val <= 127                     ? sclty(1, 1)
+	     : val <= 255                     ? sclty(1, 0)
+	     : val <= 32767                    ? sclty(2, 1)
+	     : val <= 65535                    ? sclty(2, 0)
+	     : val <= 2147483647               ? sclty(4, 1)
+	     : val <= 4294967295ULL            ? sclty(4, 0)
+	     : val <= 9223372036854775807ULL   ? sclty(8, 1)
+	                                       : sclty(8, 0);
 }
 
 /*
