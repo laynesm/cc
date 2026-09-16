@@ -750,6 +750,45 @@ void labcheck(void)
 		if (!labhas(labdefs, nlabdefs, labuses[i].lab_name)) error("undefined label '%s'", labuses[i].lab_name);
 }
 
+/*
+ * 'name := expr;' declares a new block-scope object whose type is taken
+ * from the right-hand expression. inherited scalar types are widened to
+ * at least int -- a literal '0' would otherwise infer char, and only a
+ * character literal (later) may produce a char.
+ */
+static void inferdecl(char *name)
+{
+	struct symty *ty;
+	struct sym   *s;
+	struct lval  lv;
+
+	skipws();
+	expr_ty = defty;
+	expr(-1);
+
+	ty = lval.lval_ty;
+	if (!ty)
+		error("cannot infer a type for '%s'", name);
+	if (ty->sty_kind == TYSCALR && stysize(ty) < 4)
+		ty = sclty(4, 1); /* int */
+
+	skipws();
+	if (*curs != ';') error("expected ';' after '%s := ...'", name);
+	advcurs(1);
+
+	if (symlookup(name, depth))
+		error("redefinition of variable '%s'", name);
+
+	s = symadd(name, depth, ty, SCLOCAL);
+
+	materialize(&lval);
+	lv.lval_kind   = STACK;
+	lv.lval_off    = s->sym_off;
+	lv.lval_isglob = 0;
+	lv.lval_ty     = s->sym_ty;
+	store(lv);
+}
+
 void stmt(int mode)
 {
 	skipws();
@@ -815,6 +854,12 @@ void stmt(int mode)
 		}
 
 		skipws();
+		if (*curs == ':' && curs[1] == '=') {
+			advcurs(2);
+			inferdecl(name);
+			return;
+		}
+
 		if (*curs == ':') {
 			advcurs(1);
 			labadddef(name);
