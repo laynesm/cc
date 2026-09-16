@@ -12,10 +12,10 @@
  * 'g(%rip)', not a bare displacement.
  */
 static const char *const ldtpl[2][9] = {
-	{ NULL, "\tmovzbq %s, %%rax\n", "\tmovzwq %s, %%rax\n", NULL,
-	  "\tmovl %s, %%eax\n", NULL, NULL, NULL, "\tmov %s, %%rax\n" },
-	{ NULL, "\tmovsbq %s, %%rax\n", "\tmovswq %s, %%rax\n", NULL,
-	  "\tmovslq %s, %%rax\n", NULL, NULL, NULL, "\tmov %s, %%rax\n" },
+	{NULL, "\tmovzbq %s, %%rax\n", "\tmovzwq %s, %%rax\n", NULL, "\tmovl %s, %%eax\n", NULL, NULL, NULL,
+         "\tmov %s, %%rax\n"},
+	{NULL, "\tmovsbq %s, %%rax\n", "\tmovswq %s, %%rax\n", NULL, "\tmovslq %s, %%rax\n", NULL, NULL, NULL,
+         "\tmov %s, %%rax\n"},
 };
 
 static void load_mem(const char *op, int size, int sign)
@@ -25,8 +25,8 @@ static void load_mem(const char *op, int size, int sign)
 }
 
 static const char *const sttpl[9] = {
-	NULL, "\tmovb %%al, %s\n", "\tmovw %%ax, %s\n", NULL,
-	"\tmovl %%eax, %s\n", NULL, NULL, NULL, "\tmovq %%rax, %s\n",
+	NULL, "\tmovb %%al, %s\n",  "\tmovw %%ax, %s\n", NULL, "\tmovl %%eax, %s\n", NULL, NULL,
+	NULL, "\tmovq %%rax, %s\n",
 };
 
 static void store_mem(const char *op, int size)
@@ -41,8 +41,10 @@ static void store_mem(const char *op, int size)
  */
 static const char *memop(struct lval l, char *buf, size_t len)
 {
-	if (l.lval_isglob) snprintf(buf, len, "%s(%%rip)", l.lval_glob);
-	else              snprintf(buf, len, "%d(%%rbp)", l.lval_off);
+	if (l.lval_isglob)
+		snprintf(buf, len, "%s(%%rip)", l.lval_glob);
+	else
+		snprintf(buf, len, "%d(%%rbp)", l.lval_off);
 	return buf;
 }
 
@@ -130,15 +132,13 @@ void idx(struct lval l)
 	lval.lval_kind = REGIS;
 
 	/* a[i] yields the element behind the pointer */
-	if (lval.lval_ty->sty_kind == TYPTR)
-		lval.lval_ty = lval.lval_ty->sty_base;
+	if (lval.lval_ty->sty_kind == TYPTR) lval.lval_ty = lval.lval_ty->sty_base;
 
 	/*
 	 * an array element still decays too: m[i] is an inner array,
 	 * and using it re-indexes through a pointer to its first element.
 	 */
-	if (lval.lval_ty->sty_kind == TYARR)
-		lval.lval_ty = mkptr(lval.lval_ty->sty_base);
+	if (lval.lval_ty->sty_kind == TYARR) lval.lval_ty = mkptr(lval.lval_ty->sty_base);
 }
 
 void inc(struct lval l)
@@ -173,8 +173,7 @@ void regispost(void)
  */
 void deptr(struct lval l)
 {
-	if (l.lval_ty->sty_size == 0)
-		error("cannot dereference a void pointer");
+	if (l.lval_ty->sty_size == 0) error("cannot dereference a void pointer");
 	load_mem("0(%rax)", l.lval_ty->sty_size, l.lval_ty->sty_signed);
 }
 
@@ -296,7 +295,10 @@ void emit(const char *s)
 
 void runemit(void (*fn)(struct lval), const char *tpl, struct lval l)
 {
-	if (fn) fn(l); else emit(tpl);
+	if (fn)
+		fn(l);
+	else
+		emit(tpl);
 }
 
 /* turn a pending compile-time value into a real rax result */
@@ -309,17 +311,14 @@ void materialize(struct lval *lv)
 
 void cast(struct symty *ty)
 {
-/* printed through %s like every template, so registers carry one '%' */
-static const char *const casttpl[2][9] = {
-	{ NULL, "movzbl %al, %eax", "movzwl %ax, %eax", NULL,
-	  "movl %eax, %eax", NULL, NULL, NULL, NULL },
-	{ NULL, "movsbl %al, %eax", "movswl %ax, %eax", NULL,
-	  "movslq %eax, %rax", NULL, NULL, NULL, NULL },
-};
+	/* printed through %s like every template, so registers carry one '%' */
+	static const char *const casttpl[2][9] = {
+		{NULL, "movzbl %al, %eax", "movzwl %ax, %eax", NULL, "movl %eax, %eax", NULL, NULL, NULL, NULL},
+		{NULL, "movsbl %al, %eax", "movswl %ax, %eax", NULL, "movslq %eax, %rax", NULL, NULL, NULL, NULL},
+	};
 
 	/* only the width matters: rax already holds the whole value */
-	if (ty->sty_kind != TYSCALR || !casttpl[ty->sty_signed][ty->sty_size])
-		return;
+	if (ty->sty_kind != TYSCALR || !casttpl[ty->sty_signed][ty->sty_size]) return;
 	printf("	%s\n", casttpl[ty->sty_signed][ty->sty_size]);
 }
 
@@ -363,7 +362,10 @@ static int p2log(int n)
 {
 	int log = 0;
 
-	while (n > 1) { n >>= 1; log++; }
+	while (n > 1) {
+		n >>= 1;
+		log++;
+	}
 	return log;
 }
 
@@ -379,7 +381,6 @@ void globdata(const char *name, int size, int align, unsigned long long val)
 	printf("	.globl %s\n", name);
 	lbl(name);
 
-	if (size <= 0 || size > 8 || !sztpl[size])
-		error("cannot lay out global '%s'", name);
+	if (size <= 0 || size > 8 || !sztpl[size]) error("cannot lay out global '%s'", name);
 	printf("	%s%llu\n", sztpl[size], val);
 }

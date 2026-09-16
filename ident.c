@@ -57,8 +57,7 @@ const struct keyword *peekword(void)
 
 	skipws();
 	start = curs;
-	if (!isalpha(*curs) && *curs != '_' && *curs != '$')
-		return NULL;
+	if (!isalpha(*curs) && *curs != '_' && *curs != '$') return NULL;
 
 	do curs++;
 	while (isalnum(*curs) || *curs == '_' || *curs == '$' || *curs == '?');
@@ -80,12 +79,10 @@ const struct keyword *readword(char *buf, size_t len)
 	skipws();
 	start = curs;
 
-	if (!isalpha(*curs) && *curs != '_' && *curs != '$')
-		error("expected a keyword or identifier");
+	if (!isalpha(*curs) && *curs != '_' && *curs != '$') error("expected a keyword or identifier");
 	curs++;
 
-	while (isalnum(*curs) || *curs == '_' || *curs == '?' || *curs == '$')
-		curs++;
+	while (isalnum(*curs) || *curs == '_' || *curs == '?' || *curs == '$') curs++;
 	size = (size_t)(curs - start);
 
 	if (size >= 1024) error("word is too big");

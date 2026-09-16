@@ -31,7 +31,7 @@ static struct symty *tysuf(struct symty *);
 struct symty *parsety(int first)
 {
 	char buf[KWMAX];
-	int   bits, longs, prio, size, sign, t;
+	int  bits, longs, prio, size, sign, t;
 
 	bits  = first;
 	longs = (first == TYLONG);
@@ -53,12 +53,10 @@ struct symty *parsety(int first)
 		/* the type table decides who relates to whom */
 		for (t = TYSIGNED; t <= TYVOID; t <<= 1)
 			if ((bits & t) && !(tytbl[t].ty_relate & id))
-				error("type '%s' does not relate to '%s'",
-				      kwtbl[t].kw_str, kw->kw_str);
+				error("type '%s' does not relate to '%s'", kwtbl[t].kw_str, kw->kw_str);
 
 		if (id == TYLONG) {
-			if (longs == 2)
-				error("long long long is too much long");
+			if (longs == 2) error("long long long is too much long");
 			longs++;
 		}
 
@@ -76,12 +74,10 @@ struct symty *parsety(int first)
 		}
 
 	/* an explicit sign always beats the type default */
-	if (bits & TYSIGN)
-		sign = tytbl[bits & TYSIGNED ? TYSIGNED : TYUNSIGNED].ty_signed;
+	if (bits & TYSIGN) sign = tytbl[bits & TYSIGNED ? TYSIGNED : TYUNSIGNED].ty_signed;
 
 	return sclty(size, sign);
 }
-
 
 /*
  * a '(' at the core of a declarator is a parenthesized declarator (* or
@@ -89,13 +85,13 @@ struct symty *parsety(int first)
  */
 static int isgroupstart(void)
 {
-	char                  *savcurs = curs;
+	char                 *savcurs = curs;
 	const struct keyword *kw;
 
 	skipws();
 	if (*curs != '(') return 0;
 	advcurs(1); /* peek past the '(' */
-	kw = peekword();
+	kw   = peekword();
 	curs = savcurs;
 	return !kw || kw->kw_func != doty;
 }
@@ -119,30 +115,25 @@ static struct symty *tysuf(struct symty *ty)
 			advcurs(1);
 			errno = 0;
 			len   = strtoull(curs, &end, 0);
-			if (errno || end == curs || len == 0)
-				error("invalid array length");
+			if (errno || end == curs || len == 0) error("invalid array length");
 			curs = end;
 			skipws();
 			if (*curs != ']') error("expected ']'");
 			advcurs(1);
 
-			if (nsuff == SUFFIXMAX)
-				error("too many declarator suffixes");
-			suffs[nsuff].sig = NULL;
+			if (nsuff == SUFFIXMAX) error("too many declarator suffixes");
+			suffs[nsuff].sig   = NULL;
 			suffs[nsuff++].dim = (int)len;
 		} else if (*curs == '(') {
-			if (nsuff == SUFFIXMAX)
-				error("too many declarator suffixes");
-			suffs[nsuff].dim = 0;
+			if (nsuff == SUFFIXMAX) error("too many declarator suffixes");
+			suffs[nsuff].dim   = 0;
 			suffs[nsuff++].sig = fnpar();
 		} else {
 			break;
 		}
 	}
 
-	for (int i = nsuff - 1; i >= 0; --i)
-		ty = suffs[i].sig ? mkfunc(ty, suffs[i].sig)
-		                  : mkarray(ty, suffs[i].dim);
+	for (int i = nsuff - 1; i >= 0; --i) ty = suffs[i].sig ? mkfunc(ty, suffs[i].sig) : mkarray(ty, suffs[i].dim);
 
 	return ty;
 }
@@ -170,27 +161,23 @@ static struct fnsig *fnpar(void)
 		if (*curs == ')') break;
 
 		kw = peekword();
-		if (!kw || kw->kw_func != doty)
-			error("expected a parameter type");
+		if (!kw || kw->kw_func != doty) error("expected a parameter type");
 		kw = readword(buf, sizeof(buf));
 
 		/* an abstract parameter must not inherit the outer name */
 		declname[0] = '\0';
-		pty = declarator(parsety(kw->kw_id));
+		pty         = declarator(parsety(kw->kw_id));
 		skipws();
 
 		isvoid = stysize(pty) == 0 && declname[0] == '\0';
-		if (isvoid && sig->fs_nargs)
-			error("'void' must be the only parameter");
+		if (isvoid && sig->fs_nargs) error("'void' must be the only parameter");
 
-		if (declname[0])
-			symadd(declname, depth + 1, pty, SCLOCAL);
+		if (declname[0]) symadd(declname, depth + 1, pty, SCLOCAL);
 
 		if (!isvoid) {
 			if (sig->fs_nargs == sig->fs_cap) {
-				sig->fs_cap = sig->fs_cap ? sig->fs_cap * 2 : 4;
-				sig->fs_args = realloc(sig->fs_args,
-				                       sig->fs_cap * sizeof(*sig->fs_args));
+				sig->fs_cap  = sig->fs_cap ? sig->fs_cap * 2 : 4;
+				sig->fs_args = realloc(sig->fs_args, sig->fs_cap * sizeof(*sig->fs_args));
 			}
 			sig->fs_args[sig->fs_nargs++] = pty;
 		}
@@ -225,7 +212,10 @@ static struct fnsig *fnpar(void)
 struct symty *declarator(struct symty *ty)
 {
 	/* prefix pointers bind looser than any suffix or group */
-	while (*curs == '*') { ty = mkptr(ty); advcurs(1); }
+	while (*curs == '*') {
+		ty = mkptr(ty);
+		advcurs(1);
+	}
 
 	skipws();
 	if (*curs == '(' && isgroupstart()) {

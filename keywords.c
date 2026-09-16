@@ -20,7 +20,7 @@ struct symty *funcretty;
  * label (for the increment step in 'for', the condition in
  * while/do-while).
  */
-#define LOOPMAX 64 
+#define LOOPMAX 64
 static int brklbl[LOOPMAX];
 static int cntlbl[LOOPMAX];
 static int looppos = 0;
@@ -92,6 +92,7 @@ void dogoto(const struct keyword *)
 	if (*curs != ';') error("expected ';' after goto");
 	advcurs(1);
 
+	labadduse(name);
 	printf("	jmp .L_lbl_%s\n", name);
 }
 
@@ -156,8 +157,7 @@ void doreturn(const struct keyword *)
 	expr(-1);
 	materialize(&lval);
 
-	if (funcretty && funcretty->sty_size == 0)
-		error("'return' with a value in a void function");
+	if (funcretty && funcretty->sty_size == 0) error("'return' with a value in a void function");
 
 	jmplbl(funcretlbl);
 
@@ -256,7 +256,7 @@ void dofor(const struct keyword *)
 	}
 
 	if (*curs != ')') error("missing ')' in for");
-	
+
 	post_end = curs;
 	advcurs(1);
 

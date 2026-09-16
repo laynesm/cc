@@ -45,38 +45,38 @@ const struct keyword kwtbl[] = {
  * operators that need the live lvalue keep an emitter function (op_emit).
  */
 const struct operator optbl[OPNUM] = {
-	[OPSHLEQ]  = {"<<=", 3, -1, OPASSOCR, NOPTR,   ASCOMP, 0, bshleq, NULL},
-	[OPSHREQ]  = {">>=", 3, -1, OPASSOCR, NOPTR,   ASCOMP, 0, bshreq, NULL},
-	[OPEQ]     = {"==", 2, 0, OPASSOCL, PTRNONE,   ASNONE, 0, NULL, EMITEQ},
-	[OPNEQ]    = {"!=", 2, 0, OPASSOCL, PTRNONE,   ASNONE, 0, NULL, EMITNE},
-	[OPLE]     = {"<=", 2, 1, OPASSOCL, PTRNONE,   ASNONE, 0, NULL, EMITLE},
-	[OPGE]     = {">=", 2, 1, OPASSOCL, PTRNONE,   ASNONE, 0, NULL, EMITGE},
-	[OPSHL]    = {"<<", 2, 1, OPASSOCL, NOPTR,     ASNONE, 0, NULL, EMITBSHL},
-	[OPSHR]    = {">>", 2, 1, OPASSOCL, NOPTR,     ASNONE, 0, NULL, EMITBSHR},
+	[OPSHLEQ]  = {"<<=", 3, -1, OPASSOCR, NOPTR, ASCOMP, 0, bshleq, NULL},
+	[OPSHREQ]  = {">>=", 3, -1, OPASSOCR, NOPTR, ASCOMP, 0, bshreq, NULL},
+	[OPEQ]     = {"==", 2, 0, OPASSOCL, PTRNONE, ASNONE, 0, NULL, EMITEQ},
+	[OPNEQ]    = {"!=", 2, 0, OPASSOCL, PTRNONE, ASNONE, 0, NULL, EMITNE},
+	[OPLE]     = {"<=", 2, 1, OPASSOCL, PTRNONE, ASNONE, 0, NULL, EMITLE},
+	[OPGE]     = {">=", 2, 1, OPASSOCL, PTRNONE, ASNONE, 0, NULL, EMITGE},
+	[OPSHL]    = {"<<", 2, 1, OPASSOCL, NOPTR, ASNONE, 0, NULL, EMITBSHL},
+	[OPSHR]    = {">>", 2, 1, OPASSOCL, NOPTR, ASNONE, 0, NULL, EMITBSHR},
 	[OPADDEQ]  = {"+=", 2, -1, OPASSOCR, PTRARITH, ASCOMP, 0, addeq, NULL},
 	[OPSUBEQ]  = {"-=", 2, -1, OPASSOCR, PTRARITH, ASCOMP, 0, subeq, NULL},
-	[OPMULEQ]  = {"*=", 2, -1, OPASSOCR, NOPTR,    ASCOMP, 0, muleq, NULL},
-	[OPDIVEQ]  = {"/=", 2, -1, OPASSOCR, NOPTR,    ASCOMP, 0, diveq, NULL},
-	[OPREMEQ]  = {"%=", 2, -1, OPASSOCR, NOPTR,    ASCOMP, 0, remeq, NULL},
+	[OPMULEQ]  = {"*=", 2, -1, OPASSOCR, NOPTR, ASCOMP, 0, muleq, NULL},
+	[OPDIVEQ]  = {"/=", 2, -1, OPASSOCR, NOPTR, ASCOMP, 0, diveq, NULL},
+	[OPREMEQ]  = {"%=", 2, -1, OPASSOCR, NOPTR, ASCOMP, 0, remeq, NULL},
 	[OPINC]    = {"++", 2, -1, OPASSOCR, PTRARITH, ASMOD, 0, inc, NULL},
 	[OPDEC]    = {"--", 2, -1, OPASSOCR, PTRARITH, ASMOD, 0, dec, NULL},
-	[OPAND]    = {"&&", 2,  1, OPASSOCL, PTRNONE,  ASNONE, 0, NULL, EMITAND},
-	[OPOR]     = {"||", 2,  1, OPASSOCL, PTRNONE,  ASNONE, 0, NULL, EMITOR},
-	[OPBANDEQ] = {"&=", 2, -1, OPASSOCR, NOPTR,    ASCOMP, 0, bandeq, NULL},
-	[OPBOREQ]  = {"|=", 2, -1, OPASSOCR, NOPTR,    ASCOMP, 0, boreq, NULL},
-	[OPXOREQ]  = {"^=", 2, -1, OPASSOCR, NOPTR,    ASCOMP, 0, bxoreq, NULL},
-	[OPLT]     = {"<",  1, 1, OPASSOCL, PTRNONE,   ASNONE, 0, NULL, EMITLT},
-	[OPGT]     = {">",  1, 1, OPASSOCL, PTRNONE,   ASNONE, 0, NULL, EMITGT},
-	[OPADD]    = {"+",  1, 0, OPASSOCL, PTRARITH,  ASNONE, 0, NULL, EMITADD},
-	[OPSUB]    = {"-",  1, 0, OPASSOCL, PTRARITH,  ASNONE, 0, NULL, EMITSUB},
-	[OPMUL]    = {"*",  1, 1, OPASSOCL, NOPTR,     ASNONE, 0, NULL, EMITMUL},
-	[OPDIV]    = {"/",  1, 1, OPASSOCL, NOPTR,     ASNONE, 0, NULL, EMITIDIV},
-	[OPREM]    = {"%",  1, 1, OPASSOCL, NOPTR,     ASNONE, 0, NULL, EMITREM},
-	[OPASSIGN] = {"=",  1, -1, OPASSOCR, PTRNONE,  ASTORE, 0, store, NULL},
-	[OPIDX]    = {"[",  1, 2, OPASSOCL, PTRARITH,  ASNONE, 1, idx, NULL},
-	[OPBAND]   = {"&",  1,  1, OPASSOCL, NOPTR,    ASNONE, 0, NULL, EMITBAND},
-	[OPBOR]    = {"|",  1,  1, OPASSOCL, NOPTR,    ASNONE, 0, NULL, EMITBOR},
-	[OPXOR]    = {"^",  1,  1, OPASSOCL, NOPTR,    ASNONE, 0, NULL, EMITBXOR},
+	[OPAND]    = {"&&", 2, 1, OPASSOCL, PTRNONE, ASNONE, 0, NULL, EMITAND},
+	[OPOR]     = {"||", 2, 1, OPASSOCL, PTRNONE, ASNONE, 0, NULL, EMITOR},
+	[OPBANDEQ] = {"&=", 2, -1, OPASSOCR, NOPTR, ASCOMP, 0, bandeq, NULL},
+	[OPBOREQ]  = {"|=", 2, -1, OPASSOCR, NOPTR, ASCOMP, 0, boreq, NULL},
+	[OPXOREQ]  = {"^=", 2, -1, OPASSOCR, NOPTR, ASCOMP, 0, bxoreq, NULL},
+	[OPLT]     = {"<", 1, 1, OPASSOCL, PTRNONE, ASNONE, 0, NULL, EMITLT},
+	[OPGT]     = {">", 1, 1, OPASSOCL, PTRNONE, ASNONE, 0, NULL, EMITGT},
+	[OPADD]    = {"+", 1, 0, OPASSOCL, PTRARITH, ASNONE, 0, NULL, EMITADD},
+	[OPSUB]    = {"-", 1, 0, OPASSOCL, PTRARITH, ASNONE, 0, NULL, EMITSUB},
+	[OPMUL]    = {"*", 1, 1, OPASSOCL, NOPTR, ASNONE, 0, NULL, EMITMUL},
+	[OPDIV]    = {"/", 1, 1, OPASSOCL, NOPTR, ASNONE, 0, NULL, EMITIDIV},
+	[OPREM]    = {"%", 1, 1, OPASSOCL, NOPTR, ASNONE, 0, NULL, EMITREM},
+	[OPASSIGN] = {"=", 1, -1, OPASSOCR, PTRNONE, ASTORE, 0, store, NULL},
+	[OPIDX]    = {"[", 1, 2, OPASSOCL, PTRARITH, ASNONE, 1, idx, NULL},
+	[OPBAND]   = {"&", 1, 1, OPASSOCL, NOPTR, ASNONE, 0, NULL, EMITBAND},
+	[OPBOR]    = {"|", 1, 1, OPASSOCL, NOPTR, ASNONE, 0, NULL, EMITBOR},
+	[OPXOR]    = {"^", 1, 1, OPASSOCL, NOPTR, ASNONE, 0, NULL, EMITBXOR},
 };
 
 /*
@@ -84,14 +84,14 @@ const struct operator optbl[OPNUM] = {
  * They should have association type too.
  */
 const struct unary untbl[] = {
-	{"++", 2, OPASSOCR, STACK, PTRARITH, ASNONE, inc,  NULL},
-	{"--", 2, OPASSOCR, STACK, PTRARITH, ASNONE, dec,  NULL},
-	{"+",  1, OPASSOCL, NONE,  PTRNONE,  ASNONE, NULL, EMITNOP},
-	{"-",  1, OPASSOCL, NONE,  PTRNONE,  ASNONE, NULL, EMITNEG},
-	{"~",  1, OPASSOCL, NONE,  PTRNONE,  ASNONE, NULL, EMITBNOT},
-	{"!",  1, OPASSOCL, NONE,  PTRNONE,  ASNONE, NULL, EMITLNOT},
-	{"*",  1, OPASSOCR, REGIS, DEPTR,    ASNONE, NULL, EMITNOP}, /* ignored, lead with REGIS */
-	{"&",  1, OPASSOCR, NONE,  GENPTR,   ASNONE, ptr,  NULL},
+	{"++", 2, OPASSOCR, STACK, PTRARITH, ASNONE, inc, NULL},
+	{"--", 2, OPASSOCR, STACK, PTRARITH, ASNONE, dec, NULL},
+	{"+", 1, OPASSOCL, NONE, PTRNONE, ASNONE, NULL, EMITNOP},
+	{"-", 1, OPASSOCL, NONE, PTRNONE, ASNONE, NULL, EMITNEG},
+	{"~", 1, OPASSOCL, NONE, PTRNONE, ASNONE, NULL, EMITBNOT},
+	{"!", 1, OPASSOCL, NONE, PTRNONE, ASNONE, NULL, EMITLNOT},
+	{"*", 1, OPASSOCR, REGIS, DEPTR, ASNONE, NULL, EMITNOP}, /* ignored, lead with REGIS */
+	{"&", 1, OPASSOCR, NONE, GENPTR, ASNONE, ptr, NULL},
 };
 
 /*
@@ -113,8 +113,7 @@ const struct type tytbl[] = {
 const struct keyword *kwlookup(const char *name)
 {
 	for (int i = 0; i < (int)countof(kwtbl); ++i)
-		if ((i == kwtbl[i].kw_id) && strcmp(kwtbl[i].kw_str, name) == 0)
-			return &kwtbl[i];
+		if ((i == kwtbl[i].kw_id) && strcmp(kwtbl[i].kw_str, name) == 0) return &kwtbl[i];
 
 	return NULL;
 }
@@ -122,8 +121,7 @@ const struct keyword *kwlookup(const char *name)
 const struct operator *opundercurs(void)
 {
 	for (size_t i = 0; i < countof(optbl); ++i) {
-		if (strncmp(curs, optbl[i].op_str, optbl[i].op_slen) != 0)
-			continue;
+		if (strncmp(curs, optbl[i].op_str, optbl[i].op_slen) != 0) continue;
 		return &optbl[i];
 	}
 
@@ -172,8 +170,7 @@ struct sym *symadd(char *name, int scope, struct symty *ty, int stcls)
 	 */
 	if (stcls >= SCGLOB) {
 		s = symlookup(name, scope);
-		if (s && s->sym_stcls >= SCGLOB && tyeq(s->sym_ty, ty))
-			return s;
+		if (s && s->sym_stcls >= SCGLOB && tyeq(s->sym_ty, ty)) return s;
 	}
 
 	if (symlookup(name, scope)) error("symbol '%s' already declared", name);
@@ -235,8 +232,7 @@ void symrestore(int off)
 struct func *funclookup(const char *name)
 {
 	for (int i = funtab.tab_nfuncs - 1; i >= 0; --i)
-		if (strcmp(funtab.tab_funcs[i].func_name, name) == 0)
-			return &funtab.tab_funcs[i];
+		if (strcmp(funtab.tab_funcs[i].func_name, name) == 0) return &funtab.tab_funcs[i];
 
 	return NULL;
 }
@@ -257,7 +253,7 @@ struct func *funcadd(const char *name, struct symty *ty, int defflag)
 	f = &funtab.tab_funcs[funtab.tab_nfuncs++];
 	strncpy(f->func_name, name, sizeof(f->func_name) - 1);
 	f->func_name[sizeof(f->func_name) - 1] = '\0';
-	f->func_ty      = ty;
-	f->func_defined = defflag;
+	f->func_ty                             = ty;
+	f->func_defined                        = defflag;
 	return f;
 }

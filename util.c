@@ -37,10 +37,10 @@ struct symty *mkptr(struct symty *base)
 {
 	struct symty *ty = newsy();
 
-	ty->sty_kind = TYPTR;
-	ty->sty_size = 8;
+	ty->sty_kind  = TYPTR;
+	ty->sty_size  = 8;
 	ty->sty_align = 8;
-	ty->sty_base = base;
+	ty->sty_base  = base;
 	return ty;
 }
 
@@ -59,10 +59,10 @@ struct symty *mkfunc(struct symty *ret, struct fnsig *sig)
 {
 	struct symty *ty = newsy();
 
-	ty->sty_kind  = TYFUNC;
-	ty->sty_size  = 8;
-	ty->sty_base  = ret;
-	ty->sty_sig   = sig;
+	ty->sty_kind = TYFUNC;
+	ty->sty_size = 8;
+	ty->sty_base = ret;
+	ty->sty_sig  = sig;
 	return ty;
 }
 
@@ -75,9 +75,7 @@ int symalign(struct symty *ty)
 
 int stysize(struct symty *ty)
 {
-	return ty->sty_kind == TYPTR || ty->sty_kind == TYFUNC
-		       ? 8
-		       : ty->sty_size;
+	return ty->sty_kind == TYPTR || ty->sty_kind == TYFUNC ? 8 : ty->sty_size;
 }
 
 int ptrstep(struct symty *ty)
@@ -96,19 +94,16 @@ int tyeq(struct symty *a, struct symty *b)
 
 	switch (a->sty_kind) {
 	case TYSCALR:
-		return a->sty_size == b->sty_size &&
-		       a->sty_signed == b->sty_signed;
+		return a->sty_size == b->sty_size && a->sty_signed == b->sty_signed;
 	case TYPTR:
 		return tyeq(a->sty_base, b->sty_base);
 	case TYARR:
-		return a->sty_size == b->sty_size &&
-		       tyeq(a->sty_base, b->sty_base);
+		return a->sty_size == b->sty_size && tyeq(a->sty_base, b->sty_base);
 	case TYFUNC:
 		if (!tyeq(a->sty_base, b->sty_base)) return 0;
 		if (a->sty_sig->fs_nargs != b->sty_sig->fs_nargs) return 0;
 		for (int i = 0; i < a->sty_sig->fs_nargs; ++i)
-			if (!tyeq(a->sty_sig->fs_args[i], b->sty_sig->fs_args[i]))
-				return 0;
+			if (!tyeq(a->sty_sig->fs_args[i], b->sty_sig->fs_args[i])) return 0;
 		return 1;
 	default:
 		return 0;
@@ -117,13 +112,13 @@ int tyeq(struct symty *a, struct symty *b)
 
 struct symty *inferty(unsigned long long val)
 {
-	return val <= 127                     ? sclty(1, 1)
-	     : val <= 255                     ? sclty(1, 0)
-	     : val <= 32767                    ? sclty(2, 1)
-	     : val <= 65535                    ? sclty(2, 0)
-	     : val <= 2147483647               ? sclty(4, 1)
-	     : val <= 4294967295ULL            ? sclty(4, 0)
-	     : val <= 9223372036854775807ULL   ? sclty(8, 1)
+	return val <= 127                      ? sclty(1, 1)
+	       : val <= 255                    ? sclty(1, 0)
+	       : val <= 32767                  ? sclty(2, 1)
+	       : val <= 65535                  ? sclty(2, 0)
+	       : val <= 2147483647             ? sclty(4, 1)
+	       : val <= 4294967295ULL          ? sclty(4, 0)
+	       : val <= 9223372036854775807ULL ? sclty(8, 1)
 	                                       : sclty(8, 0);
 }
 

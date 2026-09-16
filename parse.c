@@ -58,11 +58,9 @@ static void tyassign(struct symty *dst, struct symty *src)
 		 * a void* is the generic pointer: it freely converts to and
 		 * from any other pointer type.
 		 */
-		if (dst->sty_base->sty_size == 0 || src->sty_base->sty_size == 0)
-			return;
+		if (dst->sty_base->sty_size == 0 || src->sty_base->sty_size == 0) return;
 
-		if (!tyeq(dst->sty_base, src->sty_base))
-			error("assignment from incompatible pointer type");
+		if (!tyeq(dst->sty_base, src->sty_base)) error("assignment from incompatible pointer type");
 		return;
 	}
 
@@ -70,8 +68,7 @@ static void tyassign(struct symty *dst, struct symty *src)
 		warn("implicit conversion changes signedness");
 
 	if (src->sty_size > dst->sty_size)
-		warn("implicit conversion loses %d bits of precision",
-		     (src->sty_size - dst->sty_size) * 8);
+		warn("implicit conversion loses %d bits of precision", (src->sty_size - dst->sty_size) * 8);
 }
 
 /*
@@ -96,8 +93,9 @@ static int fndecl(const char *name, struct symty *ty, int framesave)
 	}
 
 	funcadd(name, ty, 1);
-	funcretty = ty->sty_base;
+	funcretty  = ty->sty_base;
 	funcretlbl = newlbl();
+	labreset();
 
 	sectext();
 	globl(name);
@@ -105,6 +103,7 @@ static int fndecl(const char *name, struct symty *ty, int framesave)
 
 	stmt(STMT); /* the body block */
 
+	labcheck();
 	idlbl(funcretlbl);
 	epilogue();
 	ret();
@@ -120,10 +119,9 @@ static int fndecl(const char *name, struct symty *ty, int framesave)
 
 void decl(struct symty *ty)
 {
-	int   remaining = 0;
-	int   framesave = symsave();
-	int   cls = extdecl ? SCEXT
-	                   : (curstmt == STMT && depth == 0) ? SCGLOB : SCLOCAL;
+	int remaining = 0;
+	int framesave = symsave();
+	int cls       = extdecl ? SCEXT : (curstmt == STMT && depth == 0) ? SCGLOB : SCLOCAL;
 
 	extdecl = 0;
 
@@ -133,15 +131,13 @@ void decl(struct symty *ty)
 
 		skipws();
 		declname[0] = '\0';
-		curty = declarator(ty);
+		curty       = declarator(ty);
 
-		if (declname[0] == '\0')
-			error("declaration without a name");
+		if (declname[0] == '\0') error("declaration without a name");
 
 		if (curty->sty_kind == TYFUNC) {
 			/* a body already consumed its own ';' */
-			if (fndecl(declname, curty, framesave))
-				break;
+			if (fndecl(declname, curty, framesave)) break;
 			skipws();
 		} else {
 			s = symadd(declname, depth, curty, cls);
@@ -151,15 +147,13 @@ void decl(struct symty *ty)
 			 * behind a pointer ('void *') or as a function result,
 			 * never as a standalone object.
 			 */
-			if (stysize(curty) == 0)
-				error("variable '%s' cannot be void", s->sym_name);
+			if (stysize(curty) == 0) error("variable '%s' cannot be void", s->sym_name);
 
 			skipws();
 
 			if (cls == SCLOCAL) {
 				if (*curs == '=') {
-					if (curty->sty_kind == TYARR)
-						error("array initializer not yet supported");
+					if (curty->sty_kind == TYARR) error("array initializer not yet supported");
 					advcurs(1);
 					expr_ty = s->sym_ty;
 					expr(-1);
@@ -188,7 +182,7 @@ void decl(struct symty *ty)
 					lval.lval_ty   = s->sym_ty;
 					store(lval);
 				}
-} else {
+			} else {
 				/*
 				 * a file-scope object accepts only a constant
 				 * initializer: no code may run before the program does.
@@ -199,20 +193,16 @@ void decl(struct symty *ty)
 					expr(-1);
 					tyassign(s->sym_ty, lval.lval_ty);
 
-					if (!lval.lval_isconst)
-						error("initializer element is not constant");
+					if (!lval.lval_isconst) error("initializer element is not constant");
 
 					if (cls == SCGLOB) {
-						if (s->sym_done)
-							error("redefinition of '%s'", s->sym_name);
-						globdata(s->sym_name, stysize(curty),
-						         symalign(curty), lval.lval_val);
+						if (s->sym_done) error("redefinition of '%s'", s->sym_name);
+						globdata(s->sym_name, stysize(curty), symalign(curty), lval.lval_val);
 						s->sym_done = 1;
 					}
 				} else if (cls == SCGLOB && !s->sym_done) {
 					/* a tentative object: common storage, once */
-					globcomm(s->sym_name, stysize(curty),
-					         symalign(curty));
+					globcomm(s->sym_name, stysize(curty), symalign(curty));
 				}
 			}
 		}
@@ -231,9 +221,9 @@ void decl(struct symty *ty)
 void factor(void)
 {
 	const struct unary *un;
-	unsigned long long val;
-	char *end;
-	int base;
+	unsigned long long  val;
+	char               *end;
+	int                 base;
 
 	skipws();
 	un = unopundercurs();
@@ -251,8 +241,7 @@ void factor(void)
 			if (un->un_ptr == PTRARITH) effect = 1;
 
 			if (un->un_ptr == DEPTR) {
-				if (l.lval_ty->sty_kind != TYPTR)
-					error("cannot dereference non-pointer");
+				if (l.lval_ty->sty_kind != TYPTR) error("cannot dereference non-pointer");
 
 				/*
 				 * '[' binds tighter than '*': '*ap[1]' is
@@ -277,17 +266,16 @@ void factor(void)
 
 				l.lval_ty = l.lval_ty->sty_base;
 			} else if (l.lval_off == NONE && !l.lval_isglob) {
-				error("l-value required for unary '%s' operand",
-				      un->un_str);
+				error("l-value required for unary '%s' operand", un->un_str);
 			}
 
 			if (un->un_ptr == GENPTR) l.lval_ty = mkptr(l.lval_ty);
 
-			lval.lval_kind = un->un_genlval;
-			lval.lval_off  = NONE;
-			lval.lval_ty   = l.lval_ty;
-			lval.lval_isconst   = 0;
-			lval.lval_isglob    = 0;
+			lval.lval_kind    = un->un_genlval;
+			lval.lval_off     = NONE;
+			lval.lval_ty      = l.lval_ty;
+			lval.lval_isconst = 0;
+			lval.lval_isglob  = 0;
 
 			runemit(un->un_emit, un->un_tpl, l);
 			return;
@@ -300,10 +288,17 @@ void factor(void)
 		}
 
 		switch (*un->un_str) {
-		case '-': lval.lval_val = (unsigned long long) - (long long)lval.lval_val; break;
-		case '~': lval.lval_val = ~lval.lval_val; break;
-		case '!': lval.lval_val = lval.lval_val == 0; break;
-		default:  break; /* unary '+' */
+		case '-':
+			lval.lval_val = (unsigned long long)-(long long)lval.lval_val;
+			break;
+		case '~':
+			lval.lval_val = ~lval.lval_val;
+			break;
+		case '!':
+			lval.lval_val = lval.lval_val == 0;
+			break;
+		default:
+			break; /* unary '+' */
 		}
 		return;
 	}
@@ -338,11 +333,11 @@ void factor(void)
 			if (l.lval_kind == REGIS) deptr(l);
 			materialize(&lval);
 			cast(cty);
-			lval.lval_kind = NONE;
-			lval.lval_off  = NONE;
-			lval.lval_ty   = cty;
-			lval.lval_isconst   = 0;
-			lval.lval_isglob    = 0;
+			lval.lval_kind    = NONE;
+			lval.lval_off     = NONE;
+			lval.lval_ty      = cty;
+			lval.lval_isconst = 0;
+			lval.lval_isglob  = 0;
 			return;
 		}
 
@@ -355,7 +350,7 @@ void factor(void)
 		return;
 	}
 
-if (isalpha(*curs) || *curs == '_' || *curs == '$') {
+	if (isalpha(*curs) || *curs == '_' || *curs == '$') {
 		char       *savcurs = curs;
 		struct sym *s;
 		char        name[SYMMAX];
@@ -374,9 +369,9 @@ if (isalpha(*curs) || *curs == '_' || *curs == '$') {
 
 			/* a function name is the address of its entry point */
 			printf("	lea %s(%%rip), %%rax\n", f->func_name);
-			lval.lval_kind = NONE;
-			lval.lval_off  = NONE;
-			lval.lval_ty   = mkptr(f->func_ty);
+			lval.lval_kind    = NONE;
+			lval.lval_off     = NONE;
+			lval.lval_ty      = mkptr(f->func_ty);
 			lval.lval_isconst = 0;
 			lval.lval_isglob  = 0;
 			return;
@@ -389,22 +384,21 @@ if (isalpha(*curs) || *curs == '_' || *curs == '$') {
 		if (s->sym_stcls >= SCGLOB) {
 			if (s->sym_ty->sty_kind == TYARR) {
 				printf("	lea %s(%%rip), %%rax\n", s->sym_name);
-				lval.lval_kind = NONE;
-				lval.lval_off  = s->sym_off;
-				lval.lval_ty   = mkptr(s->sym_ty->sty_base);
+				lval.lval_kind    = NONE;
+				lval.lval_off     = s->sym_off;
+				lval.lval_ty      = mkptr(s->sym_ty->sty_base);
 				lval.lval_isconst = 0;
 				lval.lval_isglob  = 0;
 				return;
 			}
 
-			lval.lval_kind  = STACK;
-			lval.lval_off   = NONE;
+			lval.lval_kind   = STACK;
+			lval.lval_off    = NONE;
 			lval.lval_isglob = 1;
-			strncpy(lval.lval_glob, s->sym_name,
-			        sizeof(lval.lval_glob) - 1);
+			strncpy(lval.lval_glob, s->sym_name, sizeof(lval.lval_glob) - 1);
 			lval.lval_glob[sizeof(lval.lval_glob) - 1] = '\0';
-			lval.lval_ty    = s->sym_ty;
-			lval.lval_isconst = 0;
+			lval.lval_ty                               = s->sym_ty;
+			lval.lval_isconst                          = 0;
 			load(lval);
 			return;
 		}
@@ -415,17 +409,17 @@ if (isalpha(*curs) || *curs == '_' || *curs == '$') {
 		 */
 		if (s->sym_ty->sty_kind == TYARR) {
 			printf("	lea %d(%%rbp), %%rax\n", s->sym_off);
-			lval.lval_kind = NONE;
-			lval.lval_off  = s->sym_off;
-			lval.lval_ty   = mkptr(s->sym_ty->sty_base);
+			lval.lval_kind    = NONE;
+			lval.lval_off     = s->sym_off;
+			lval.lval_ty      = mkptr(s->sym_ty->sty_base);
 			lval.lval_isconst = 0;
 			lval.lval_isglob  = 0;
 			return;
 		}
 
-		lval.lval_kind = STACK;
-		lval.lval_off  = s->sym_off;
-		lval.lval_ty   = s->sym_ty;
+		lval.lval_kind    = STACK;
+		lval.lval_off     = s->sym_off;
+		lval.lval_ty      = s->sym_ty;
 		lval.lval_isconst = 0;
 		lval.lval_isglob  = 0;
 		load(lval);
@@ -453,11 +447,11 @@ if (isalpha(*curs) || *curs == '_' || *curs == '$') {
 	curs = end;
 	skipws();
 
-	lval.lval_kind   = NONE;
-	lval.lval_ty     = expr_ty->sty_kind == TYPTR ? defty : inferty(val);
+	lval.lval_kind    = NONE;
+	lval.lval_ty      = expr_ty->sty_kind == TYPTR ? defty : inferty(val);
 	lval.lval_isconst = 1;
 	lval.lval_isglob  = 0;
-	lval.lval_val    = val;
+	lval.lval_val     = val;
 }
 
 void pointarith(const struct operator *op, struct symty *lhsty, struct symty *rhsty, int iscompound)
@@ -468,10 +462,8 @@ void pointarith(const struct operator *op, struct symty *lhsty, struct symty *rh
 	/* the two pointer flags add up to a single case number */
 	if (islhsptr + isrhsptr == 2) error("both operands are pointers");
 	if (islhsptr + isrhsptr == 0) return;
-	if (iscompound && isrhsptr && !islhsptr)
-		error("assignment makes integer from pointer without a cast");
-	if (op->op_ptr == NOPTR)
-		error("invalid pointer operation");
+	if (iscompound && isrhsptr && !islhsptr) error("assignment makes integer from pointer without a cast");
+	if (op->op_ptr == NOPTR) error("invalid pointer operation");
 
 	struct symty *ptrty = islhsptr ? lhsty : rhsty;
 	const char   *reg   = islhsptr && !iscompound ? "%rcx" : "%rax";
@@ -488,14 +480,12 @@ void pointarith(const struct operator *op, struct symty *lhsty, struct symty *rh
  */
 static void derefvalue(struct lval *lv)
 {
-	if (!derefpend)
-		return;
+	if (!derefpend) return;
 
-	if (lv->lval_ty->sty_kind != TYPTR)
-		error("cannot dereference non-pointer");
+	if (lv->lval_ty->sty_kind != TYPTR) error("cannot dereference non-pointer");
 	load(*lv);
 	lv->lval_ty = lv->lval_ty->sty_base;
-	derefpend = 0;
+	derefpend   = 0;
 }
 
 /*
@@ -503,18 +493,33 @@ static void derefvalue(struct lval *lv)
  * fold and the machine agree. the operator's index is its table position.
  * returns 0 when the operator has no fold or the fold must not happen.
  */
-static int foldop(const struct operator *op, unsigned long long l,
-                  unsigned long long r, unsigned long long *out)
+static int foldop(const struct operator *op, unsigned long long l, unsigned long long r, unsigned long long *out)
 {
 	switch (op - optbl) {
-	case OPADD: *out = l + r; break;
-	case OPSUB: *out = l - r; break;
-	case OPMUL: *out = l * r; break;
-	case OPSHL: *out = l << (r & 63); break;
-	case OPSHR: *out = l >> (r & 63); break;
-	case OPBAND: *out = l & r; break;
-	case OPBOR:  *out = l | r; break;
-	case OPXOR:  *out = l ^ r; break;
+	case OPADD:
+		*out = l + r;
+		break;
+	case OPSUB:
+		*out = l - r;
+		break;
+	case OPMUL:
+		*out = l * r;
+		break;
+	case OPSHL:
+		*out = l << (r & 63);
+		break;
+	case OPSHR:
+		*out = l >> (r & 63);
+		break;
+	case OPBAND:
+		*out = l & r;
+		break;
+	case OPBOR:
+		*out = l | r;
+		break;
+	case OPXOR:
+		*out = l ^ r;
+		break;
 
 	/* idiv is signed; a zero divisor keeps the runtime crash */
 	case OPDIV:
@@ -527,14 +532,30 @@ static int foldop(const struct operator *op, unsigned long long l,
 		break;
 
 	/* compares and the boolean ops narrow to 0/1 */
-	case OPEQ: *out = l == r; break;
-	case OPNEQ: *out = l != r; break;
-	case OPLT: *out = (long long)l < (long long)r; break;
-	case OPGT: *out = (long long)l > (long long)r; break;
-	case OPLE: *out = (long long)l <= (long long)r; break;
-	case OPGE: *out = (long long)l >= (long long)r; break;
-	case OPAND: *out = l != 0 && r != 0; break;
-	case OPOR:  *out = l != 0 || r != 0; break;
+	case OPEQ:
+		*out = l == r;
+		break;
+	case OPNEQ:
+		*out = l != r;
+		break;
+	case OPLT:
+		*out = (long long)l < (long long)r;
+		break;
+	case OPGT:
+		*out = (long long)l > (long long)r;
+		break;
+	case OPLE:
+		*out = (long long)l <= (long long)r;
+		break;
+	case OPGE:
+		*out = (long long)l >= (long long)r;
+		break;
+	case OPAND:
+		*out = l != 0 && r != 0;
+		break;
+	case OPOR:
+		*out = l != 0 || r != 0;
+		break;
 
 	default:
 		return 0;
@@ -544,7 +565,7 @@ static int foldop(const struct operator *op, unsigned long long l,
 
 void expr(int min_prec)
 {
-	struct symty *saved = expr_ty;
+	struct symty *saved   = expr_ty;
 	int           savedep = derefpend;
 	static int    depth;
 
@@ -563,7 +584,7 @@ void expr(int min_prec)
 
 	for (;;) {
 		const struct operator *op = opundercurs();
-		struct symty           *lhs_ty;
+		struct symty          *lhs_ty;
 
 		if (!op || op->op_precedence < min_prec) break;
 		advcurs(op->op_slen);
@@ -572,8 +593,7 @@ void expr(int min_prec)
 
 		if (op->op_assoc == OPASSOCR) {
 			struct lval l = lval;
-			if (l.lval_kind == NONE)
-				error("assignment without an l-value.");
+			if (l.lval_kind == NONE) error("assignment without an l-value.");
 			derefvalue(&l);
 
 			/* an assignment always writes, whatever its outcome */
@@ -591,7 +611,8 @@ void expr(int min_prec)
 			materialize(&lval);
 
 			if (op->op_assign != ASMOD) {
-				if (op->op_assign == ASTORE || (l.lval_ty->sty_kind != TYPTR && lval.lval_ty->sty_kind != TYPTR))
+				if (op->op_assign == ASTORE ||
+				    (l.lval_ty->sty_kind != TYPTR && lval.lval_ty->sty_kind != TYPTR))
 					tyassign(l.lval_ty, lval.lval_ty);
 
 				if (op->op_assign != ASTORE) pointarith(op, l.lval_ty, lval.lval_ty, 1);
@@ -599,10 +620,10 @@ void expr(int min_prec)
 
 			runemit(op->op_emit, op->op_tpl, l);
 
-			lval.lval_kind = NONE;
-			lval.lval_ty   = l.lval_ty;
-			lval.lval_isconst   = 0;
-			lval.lval_isglob    = 0;
+			lval.lval_kind    = NONE;
+			lval.lval_ty      = l.lval_ty;
+			lval.lval_isconst = 0;
+			lval.lval_isglob  = 0;
 			continue;
 		}
 
@@ -613,9 +634,9 @@ void expr(int min_prec)
 		if (lval.lval_kind == REGIS && !op->op_postfix) {
 			derefvalue(&lval);
 			deptr(lval);
-			lval.lval_kind = NONE;
-			lval.lval_isconst   = 0;
-			lval.lval_isglob    = 0;
+			lval.lval_kind    = NONE;
+			lval.lval_isconst = 0;
+			lval.lval_isglob  = 0;
 		}
 
 		/*
@@ -627,8 +648,8 @@ void expr(int min_prec)
 
 			lhs_ty         = lval.lval_ty;
 			lval.lval_kind = lval.lval_off = NONE;
-			lval.lval_isconst   = 0;
-			lval.lval_isglob    = 0;
+			lval.lval_isconst              = 0;
+			lval.lval_isglob               = 0;
 
 			if (lhs_cst) {
 				/* a pending constant costs nothing to keep */
@@ -667,8 +688,7 @@ void expr(int min_prec)
 				}
 			}
 
-			if (op->op_ptr == PTRARITH || op->op_ptr == NOPTR)
-				pointarith(op, lhs_ty, lval.lval_ty, 0);
+			if (op->op_ptr == PTRARITH || op->op_ptr == NOPTR) pointarith(op, lhs_ty, lval.lval_ty, 0);
 
 			lval.lval_ty = lhs_ty;
 			runemit(op->op_emit, op->op_tpl, lval);
@@ -682,8 +702,52 @@ void expr(int min_prec)
 	}
 
 	derefpend = savedep;
-	expr_ty = saved;
+	expr_ty   = saved;
 	depth--;
+}
+
+struct lab labdefs[LABMAX];
+int        nlabdefs;
+struct lab labuses[LABMAX];
+int        nlabuses;
+
+void labreset(void)
+{
+	nlabdefs = nlabuses = 0;
+}
+
+static int labhas(const struct lab labs[], int n, const char *name)
+{
+	for (int i = 0; i < n; i++)
+		if (strcmp(labs[i].lab_name, name) == 0) return 1;
+	return 0;
+}
+
+/* a 'name:' statement: record it, reject a second definition */
+void labadddef(const char *name)
+{
+	if (nlabdefs == LABMAX) error("too many labels in function");
+	if (labhas(labdefs, nlabdefs, name)) error("redefinition of label '%s'", name);
+	strncpy(labdefs[nlabdefs].lab_name, name, SYMMAX - 1);
+	labdefs[nlabdefs].lab_name[SYMMAX - 1] = '\0';
+	nlabdefs++;
+}
+
+/* a 'goto name;': remember the target, the definition may come later */
+void labadduse(const char *name)
+{
+	if (labhas(labuses, nlabuses, name)) return;
+	if (nlabuses == LABMAX) error("too many labels in function");
+	strncpy(labuses[nlabuses].lab_name, name, SYMMAX - 1);
+	labuses[nlabuses].lab_name[SYMMAX - 1] = '\0';
+	nlabuses++;
+}
+
+/* every use must be answered by a definition somewhere in the body */
+void labcheck(void)
+{
+	for (int i = 0; i < nlabuses; i++)
+		if (!labhas(labdefs, nlabdefs, labuses[i].lab_name)) error("undefined label '%s'", labuses[i].lab_name);
 }
 
 void stmt(int mode)
@@ -724,9 +788,9 @@ void stmt(int mode)
 	}
 
 	if (isalpha(*curs) || curs[0] == '_' || curs[0] == '$') {
-		char name[1024];
-		char              *savcurs      = curs;
-		const struct keyword *kw = readword(name, sizeof(name));
+		char                  name[1024];
+		char                 *savcurs = curs;
+		const struct keyword *kw      = readword(name, sizeof(name));
 
 		if (kw) {
 			/*
@@ -753,6 +817,7 @@ void stmt(int mode)
 		skipws();
 		if (*curs == ':') {
 			advcurs(1);
+			labadddef(name);
 			printf(".L_lbl_%s:\n", name);
 			stmt(STMT);
 			return;
@@ -761,7 +826,7 @@ void stmt(int mode)
 		curs = savcurs;
 	}
 
-	effect = 0;
+	effect  = 0;
 	expr_ty = defty;
 	expr(-1);
 	materialize(&lval);
