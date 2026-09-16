@@ -29,6 +29,9 @@ extern struct symty *funcretty;
  */
 #define LABMAX (1024)
 
+/* the practical bound on parameters of an old-style definition */
+#define KNRMAX (64)
+
 struct lab {
 	char lab_name[SYMMAX];
 };

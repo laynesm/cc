@@ -846,6 +846,80 @@ void stmt(int mode)
 	advcurs(1);
 }
 
+/*
+ * an old-style definition: the type was already spelled out by a
+ * prototype ('int main(int, char **);'), so the definition only lists
+ * the name and the parameter identifiers: 'main(argc, argv) { ... }'.
+ * the parameter types come from the prototype, in order.
+ */
+static int knrdef(void)
+{
+	char          name[SYMMAX];
+	char          *savcurs = curs;
+	struct func   *f;
+	struct fnsig  *sig;
+	char          parms[KNRMAX][SYMMAX];
+	int           nparms = 0;
+	int           framesave;
+
+	readident(name, sizeof(name));
+	f = funclookup(name);
+	if (!f) {
+		curs = savcurs;
+		return 0;
+	}
+
+	if (f->func_defined)
+		error("redefinition of function '%s'", name);
+	if (f->func_ty->sty_kind != TYFUNC)
+		error("'%s' is not a function", name);
+
+	skipws();
+	if (*curs != '(') {
+		curs = savcurs;
+		return 0;
+	}
+	advcurs(1); /* the '(' */
+
+	sig = f->func_ty->sty_sig;
+	if (!sig)
+		error("'%s' has no prototype to take its parameters from", name);
+
+	skipws();
+	if (*curs != ')') {
+		for (;;) {
+			if (nparms == KNRMAX)
+				error("too many parameters in '%s'", name);
+			readident(parms[nparms], sizeof(parms[nparms]));
+			nparms++;
+			skipws();
+			if (*curs == ',') {
+				advcurs(1);
+				continue;
+			}
+			if (*curs == ')') break;
+			error("expected ',' or ')' in parameter list");
+		}
+	}
+	advcurs(1); /* the ')' */
+
+	skipws();
+	if (*curs != '{')
+		error("a function body was expected after '%s'", name);
+
+	if (nparms != sig->fs_nargs)
+		error("number of arguments doesn't match the prototype of '%s'",
+		      name);
+
+	framesave = symsave();
+	for (int i = 0; i < nparms; i++)
+		symadd(parms[i], depth + 1, sig->fs_args[i], SCLOCAL);
+
+	fndecl(name, f->func_ty, framesave);
+	symdrop(depth + 1);
+	return 1;
+}
+
 void prog(void)
 {
 	skipws();
@@ -854,12 +928,24 @@ void prog(void)
 		const struct keyword *kw = peekword();
 
 		/*
+		 * qualifiers (volatile, restrict, ...) are swallowed wherever
+		 * they appear, file scope included, and left no trace.
+		 */
+		if (kw && kw->kw_func == doignored) {
+			stmt(STMT);
+			skipws();
+			continue;
+		}
+
+		/*
 		 * only declarations and function definitions may live at file
 		 * scope; an expression statement there is invalid C and would
 		 * become code no caller ever reaches.
 		 */
-		if (!kw || (kw->kw_func != doty && kw->kw_func != doextern))
+		if (!kw || (kw->kw_func != doty && kw->kw_func != doextern)) {
+			if (knrdef()) continue;
 			error("expected a declaration at file scope");
+		}
 
 		stmt(STMT);
 		skipws();
