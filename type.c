@@ -50,7 +50,11 @@ struct symty *parsety(int first)
 		kw = readword(buf, sizeof(buf));
 		id = kw->kw_id;
 
-		/* the type table decides who relates to whom */
+		/*
+		 * the type table decides who relates to whom. checked per
+		 * keyword against what is already set: a repeated type is a
+		 * self-conflict the accumulated bits can no longer see.
+		 */
 		for (t = TYSIGNED; t <= TYVOID; t <<= 1)
 			if ((bits & t) && !(tytbl[t].ty_relate & id))
 				error("type '%s' does not relate to '%s'", kwtbl[t].kw_str, kw->kw_str);
@@ -101,6 +105,15 @@ static int isgroupstart(void)
  * of 2 arrays of 3 ints, so the suffix nearest the core is the outermost
  * one: the collected list folds from the last entry back.
  */
+static void addsuff(struct suff s[], int *n, unsigned long long dim,
+                    struct fnsig *sig)
+{
+	if (*n == SUFFIXMAX) error("too many declarator suffixes");
+	s[*n].dim = (int)dim;
+	s[*n].sig = sig;
+	(*n)++;
+}
+
 static struct symty *tysuf(struct symty *ty)
 {
 	struct suff suffs[SUFFIXMAX];
@@ -121,13 +134,9 @@ static struct symty *tysuf(struct symty *ty)
 			if (*curs != ']') error("expected ']'");
 			advcurs(1);
 
-			if (nsuff == SUFFIXMAX) error("too many declarator suffixes");
-			suffs[nsuff].sig   = NULL;
-			suffs[nsuff++].dim = (int)len;
+			addsuff(suffs, &nsuff, len, NULL);
 		} else if (*curs == '(') {
-			if (nsuff == SUFFIXMAX) error("too many declarator suffixes");
-			suffs[nsuff].dim   = 0;
-			suffs[nsuff++].sig = fnpar();
+			addsuff(suffs, &nsuff, 0, fnpar());
 		} else {
 			break;
 		}
@@ -172,7 +181,10 @@ static struct fnsig *fnpar(void)
 		isvoid = stysize(pty) == 0 && declname[0] == '\0';
 		if (isvoid && sig->fs_nargs) error("'void' must be the only parameter");
 
-		if (declname[0]) symadd(declname, depth + 1, pty, SCLOCAL);
+		if (declname[0]) {
+			struct sym *sp = symadd(declname, depth + 1, pty, SCLOCAL);
+			fparamadd(sp->sym_off, pty);
+		}
 
 		if (!isvoid) {
 			if (sig->fs_nargs == sig->fs_cap) {

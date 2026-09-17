@@ -17,6 +17,10 @@ struct lval lval;
 
 struct symty *expr_ty;
 
+int stkpend;
+
+static void fccall(const char *, int, int);
+
 /*
  * subscript into optbl of the operator that glued the whole expression
  * together. only the outermost expr() call fills it, so a condition
@@ -41,11 +45,28 @@ static int curstmt;
 static int effect;
 
 /*
+ * a rebuilt l-value that is not a memory location: the value (or the
+ * compile-time constant) lives in %rax. the caller picks the kind and
+ * the target type; freshlval settles the rest.
+ */
+static void freshlval(int kind, int off, struct symty *ty)
+{
+	lval.lval_kind    = kind;
+	lval.lval_off     = off;
+	lval.lval_ty      = ty;
+	lval.lval_isconst = 0;
+	lval.lval_isglob  = 0;
+}
+
+/*
  * basic assignment type checking.
  * pointers are strict, scalars only warn.
  */
 static void tyassign(struct symty *dst, struct symty *src)
 {
+	/* a function designator converts to a pointer to the function */
+	if (src->sty_kind == TYFUNC) src = mkptr(src);
+
 	if (dst->sty_kind == TYPTR || src->sty_kind == TYPTR) {
 		if (src->sty_kind != TYPTR)
 			error("assignment makes pointer from integer without a "
@@ -89,6 +110,7 @@ static int fndecl(const char *name, struct symty *ty, int framesave)
 		funcadd(name, ty, 0);
 		symdrop(depth + 1);
 		symrestore(framesave);
+		fparamreset();
 		return 0;
 	}
 
@@ -110,6 +132,7 @@ static int fndecl(const char *name, struct symty *ty, int framesave)
 	endframe(setup, body, framesize());
 
 	symrestore(framesave);
+	fparamreset();
 
 	/* a stray ';' after the '}' is a null statement, not part of this one */
 	skipws();
@@ -218,6 +241,97 @@ void decl(struct symty *ty)
 	} while (remaining);
 }
 
+/*
+ * the radix prefixes a '0'-led literal may carry: 0x/0d/0b/0o. a plain
+ * '0' with none of them falls back to octal, like C says.
+ */
+struct litpref {
+	char c;
+	int  base;
+};
+
+static const struct litpref litpref[] = {
+	{'x', 16}, {'d', 10}, {'b', 2}, {'o', 8},
+};
+
+static int litbase(char c)
+{
+	for (int i = 0; i < (int)countof(litpref); i++)
+		if (litpref[i].c == c) return litpref[i].base;
+
+	return 0; /* not a radix prefix: plain octal */
+}
+
+/*
+ * a call argument list and its emission. 'via' is the call target:
+ * a function name ("add") or an indirect marker ("*%rax") when the
+ * address sits in %rax. for an indirect call the target is pushed
+ * first -- the argument runs below and fccall's redistribution wipes
+ * %rax -- and recovered by fccall just before the 'call'.
+ */
+static void callargs(const char *via, struct fnsig *sig)
+{
+	int indir = via[0] == '*';
+	int k     = sig->fs_nargs > 6 ? sig->fs_nargs - 6 : 0;
+	int narg  = 0;
+
+	if (indir) {
+		printf("	push %%rax\n");
+		stkpend += 8;
+	}
+
+	/*
+	 * an indirect call keeps the target on the tank below the reserve:
+	 * the extra +8 inside the padding keeps the reserve plus the saved
+	 * target 16-aligned, so the 'call' runs from the same rsp the
+	 * direct path would use.
+	 */
+	int total = 8 * k + ((16 - ((stkpend + 8 * k + (indir ? 8 : 0)) % 16)) % 16);
+
+	advcurs(1);
+	skipws();
+
+	/*
+	 * reserve the final column of the arguments that go on
+	 * the stack (plus any alignment padding) before any
+	 * argument runs: the reserve must already be in play
+	 * for the pop-and-repark step that follows them.
+	 */
+	if (total) {
+		stkpend += total;
+		printf("	sub $%d, %%rsp\n", total);
+	}
+
+	/*
+	 * each argument is a full expression; its result is
+	 * parked on the stack for the fccall redistribution.
+	 */
+	if (*curs != ')') {
+		for (;;) {
+			expr_ty = defty;
+			expr(-1);
+			if (narg < sig->fs_nargs) tyassign(sig->fs_args[narg], lval.lval_ty);
+			materialize(&lval);
+			park();
+			skipws();
+			if (*curs == ',') {
+				advcurs(1);
+				narg++;
+				continue;
+			}
+			break;
+		}
+		narg++;
+	}
+
+	if (*curs != ')') error("expected ')'");
+	advcurs(1);
+	if (narg != sig->fs_nargs) error("wrong number of arguments to '%s'", via);
+
+	fccall(via, narg, total);
+	effect = 1;
+}
+
 void factor(void)
 {
 	const struct unary *un;
@@ -271,11 +385,7 @@ void factor(void)
 
 			if (un->un_ptr == GENPTR) l.lval_ty = mkptr(l.lval_ty);
 
-			lval.lval_kind    = un->un_genlval;
-			lval.lval_off     = NONE;
-			lval.lval_ty      = l.lval_ty;
-			lval.lval_isconst = 0;
-			lval.lval_isglob  = 0;
+			freshlval(un->un_genlval, NONE, l.lval_ty);
 
 			runemit(un->un_emit, un->un_tpl, l);
 			return;
@@ -333,11 +443,7 @@ void factor(void)
 			if (l.lval_kind == REGIS) deptr(l);
 			materialize(&lval);
 			cast(cty);
-			lval.lval_kind    = NONE;
-			lval.lval_off     = NONE;
-			lval.lval_ty      = cty;
-			lval.lval_isconst = 0;
-			lval.lval_isglob  = 0;
+			freshlval(NONE, NONE, cty);
 			return;
 		}
 
@@ -361,19 +467,24 @@ void factor(void)
 		s = symlookup(name, -1);
 		if (!s) {
 			struct func *f = funclookup(name);
+			struct fnsig *sig;
 
 			if (!f) {
 				curs = savcurs;
 				error("undefined usage of '%s'", name);
 			}
 
+			sig = f->func_ty->sty_sig;
+
+			if (*curs == '(') {
+				callargs(f->func_name, sig);
+				freshlval(NONE, NONE, f->func_ty->sty_base);
+				return;
+			}
+
 			/* a function name is the address of its entry point */
 			printf("	lea %s(%%rip), %%rax\n", f->func_name);
-			lval.lval_kind    = NONE;
-			lval.lval_off     = NONE;
-			lval.lval_ty      = mkptr(f->func_ty);
-			lval.lval_isconst = 0;
-			lval.lval_isglob  = 0;
+			freshlval(NONE, NONE, mkptr(f->func_ty));
 			return;
 		}
 
@@ -384,21 +495,14 @@ void factor(void)
 		if (s->sym_stcls >= SCGLOB) {
 			if (s->sym_ty->sty_kind == TYARR) {
 				printf("	lea %s(%%rip), %%rax\n", s->sym_name);
-				lval.lval_kind    = NONE;
-				lval.lval_off     = s->sym_off;
-				lval.lval_ty      = mkptr(s->sym_ty->sty_base);
-				lval.lval_isconst = 0;
-				lval.lval_isglob  = 0;
+				freshlval(NONE, s->sym_off, mkptr(s->sym_ty->sty_base));
 				return;
 			}
 
-			lval.lval_kind   = STACK;
-			lval.lval_off    = NONE;
+			freshlval(STACK, NONE, s->sym_ty);
 			lval.lval_isglob = 1;
 			strncpy(lval.lval_glob, s->sym_name, sizeof(lval.lval_glob) - 1);
 			lval.lval_glob[sizeof(lval.lval_glob) - 1] = '\0';
-			lval.lval_ty                               = s->sym_ty;
-			lval.lval_isconst                          = 0;
 			load(lval);
 			return;
 		}
@@ -409,19 +513,11 @@ void factor(void)
 		 */
 		if (s->sym_ty->sty_kind == TYARR) {
 			printf("	lea %d(%%rbp), %%rax\n", s->sym_off);
-			lval.lval_kind    = NONE;
-			lval.lval_off     = s->sym_off;
-			lval.lval_ty      = mkptr(s->sym_ty->sty_base);
-			lval.lval_isconst = 0;
-			lval.lval_isglob  = 0;
+			freshlval(NONE, s->sym_off, mkptr(s->sym_ty->sty_base));
 			return;
 		}
 
-		lval.lval_kind    = STACK;
-		lval.lval_off     = s->sym_off;
-		lval.lval_ty      = s->sym_ty;
-		lval.lval_isconst = 0;
-		lval.lval_isglob  = 0;
+		freshlval(STACK, s->sym_off, s->sym_ty);
 		load(lval);
 		return;
 	}
@@ -430,9 +526,8 @@ void factor(void)
 	if (*curs == '0') {
 		char c = tolower(curs[1]);
 
-		base = c == 'x' ? 16 : c == 'd' ? 10 : c == 'b' ? 2 : c == 'o' ? 8 : 8;
-
-		if (c == 'x' || c == 'd' || c == 'b' || c == 'o') {
+		base = litbase(c);
+		if (base) {
 			if (!isdigit(curs[2])) error("incomplete literal");
 			curs += 2;
 		}
@@ -583,10 +678,44 @@ void expr(int min_prec)
 	factor();
 
 	for (;;) {
-		const struct operator *op = opundercurs();
-		struct symty          *lhs_ty;
+		const struct operator *op;
 
-		if (!op || op->op_precedence < min_prec) break;
+		/*
+		 * a postfix '(' on a function designator or a function
+		 * pointer is a call. the address (or the pointer value,
+		 * which is the address) is in %rax; callargs saves it for
+		 * the indirect emission.
+		 */
+		if (*curs == '(' && lval.lval_ty) {
+			/*
+			 * a register lvalue is a pending address ('tab[i]'
+			 * keeps the slot address): read the object, exactly
+			 * like any other operand. a function designator
+			 * (*fp) stays -- deptr is lazy on function types.
+			 */
+			if (lval.lval_kind == REGIS) {
+				derefvalue(&lval);
+				deptr(lval);
+				freshlval(NONE, NONE, lval.lval_ty);
+			}
+
+			if (lval.lval_ty->sty_kind == TYFUNC ||
+			    (lval.lval_ty->sty_kind == TYPTR && lval.lval_ty->sty_base->sty_kind == TYFUNC)) {
+				struct symty *fny   = lval.lval_ty->sty_kind == TYFUNC ? lval.lval_ty : lval.lval_ty->sty_base;
+				struct symty *retty = fny->sty_base;
+				struct symty *sty   = expr_ty;
+
+				callargs("*%rax", fny->sty_sig);
+				expr_ty = sty;
+				freshlval(NONE, NONE, retty);
+				continue;
+			}
+		}
+
+		op = opundercurs();
+		struct symty *lhs_ty;
+
+		if (!op || (op->op_precedence < min_prec && !op->op_postfix)) break;
 		advcurs(op->op_slen);
 
 		if (depth == 1) expr_rootop = (int)(op - optbl);
@@ -599,14 +728,14 @@ void expr(int min_prec)
 			/* an assignment always writes, whatever its outcome */
 			effect = 1;
 
-			if (l.lval_kind == REGIS) regispre();
+			if (l.lval_kind == REGIS) park();
 
 			if (op->op_assign != ASMOD) {
 				expr_ty = l.lval_ty;
 				expr(op->op_precedence);
 			}
 
-			if (l.lval_kind == REGIS) regispost();
+			if (l.lval_kind == REGIS) unpark();
 
 			materialize(&lval);
 
@@ -620,10 +749,7 @@ void expr(int min_prec)
 
 			runemit(op->op_emit, op->op_tpl, l);
 
-			lval.lval_kind    = NONE;
-			lval.lval_ty      = l.lval_ty;
-			lval.lval_isconst = 0;
-			lval.lval_isglob  = 0;
+			freshlval(NONE, NONE, l.lval_ty);
 			continue;
 		}
 
@@ -634,64 +760,104 @@ void expr(int min_prec)
 		if (lval.lval_kind == REGIS && !op->op_postfix) {
 			derefvalue(&lval);
 			deptr(lval);
-			lval.lval_kind    = NONE;
-			lval.lval_isconst = 0;
-			lval.lval_isglob  = 0;
+			freshlval(NONE, NONE, lval.lval_ty);
 		}
 
 		/*
 		 * If it is left-associated, overwrite the l-value.
+		 * a constant left operand is never loaded, so it can wait and
+		 * fold with a constant right side; a register operand must be
+		 * parked before the right side runs over the registers.
 		 */
-		{
-			int                lhs_cst = lval.lval_isconst;
-			unsigned long long lhsv    = lval.lval_val;
+		int                lhs_cst = lval.lval_isconst;
+		unsigned long long lhsv    = lval.lval_val;
+		int                rec_prec;
 
-			lhs_ty         = lval.lval_ty;
-			lval.lval_kind = lval.lval_off = NONE;
-			lval.lval_isconst              = 0;
-			lval.lval_isglob               = 0;
+		lhs_ty         = lval.lval_ty;
+		freshlval(NONE, NONE, lval.lval_ty);
+		rec_prec = op->op_postfix ? -1 : op->op_precedence + 1;
 
-			if (lhs_cst) {
-				/* a pending constant costs nothing to keep */
-				expr_ty = lhs_ty;
-				expr(op->op_postfix ? -1 : op->op_precedence + 1);
+		/*
+		 * && and || short-circuit. a deciding left operand skips the
+		 * right side altogether: the rhs is parsed (so the operand is
+		 * consumed and type-checked) but its code is jumped over and
+		 * never runs. a runtime lhs branches around the rhs; when the
+		 * rhs does run, EMITAND/EMITOR below already fold it to 0/1.
+		 */
+		int osc      = (int)(op - optbl) == OPAND || (int)(op - optbl) == OPOR;
+		int osteq    = (int)(op - optbl) == OPAND;
+		int sc_short = -1, sc_done = -1;
 
-				/*
-				 * both operands were compile-time values: fold in C
-				 * and emit nothing. a pointer lhs is skipped --
-				 * pointer values never leave the type system as
-				 * consts.
-				 */
-				if (lval.lval_isconst && lhs_ty->sty_kind != TYPTR &&
-				    foldop(op, lhsv, lval.lval_val, &lval.lval_val))
-					continue;
+		if (osc) {
+			sc_short = newlbl();
+			sc_done  = newlbl();
+		}
 
-				/* park the materialized rhs, reload the lhs */
-				materialize(&lval);
-				printf("	push %%rax\n");
-				printf("	pop %%rcx\n");
-				retval(lhsv);
-			} else {
-				printf("	push %%rax\n");
-				expr_ty = lhs_ty;
-				expr(op->op_postfix ? -1 : op->op_precedence + 1);
-
-				if (lval.lval_isconst) {
-					/* rhs is a compile-time value: an immediate */
-					printf("	pop %%rcx\n");
-					printf("	mov $%llu, %%rcx\n", lval.lval_val);
-					lval.lval_isconst = 0;
-				} else {
-					printf("	pop %%rcx\n");
-					printf("	xchg %%rax, %%rcx\n");
-					lval.lval_isglob = 0;
-				}
-			}
-
-			if (op->op_ptr == PTRARITH || op->op_ptr == NOPTR) pointarith(op, lhs_ty, lval.lval_ty, 0);
-
+		if (osc && lhs_cst && (lhs_cst ? (osteq ? lhsv == 0 : lhsv != 0) : 0)) {
+			printf("\tjmp .L%d\n", sc_done);
+			expr_ty = lhs_ty;
+			expr(rec_prec);
+			idlbl(sc_done);
+			printf("\tmov $%d,%%rax\n", osteq ? 0 : 1);
 			lval.lval_ty = lhs_ty;
-			runemit(op->op_emit, op->op_tpl, lval);
+			freshlval(NONE, NONE, lhs_ty);
+			continue;
+		}
+
+		if (osc && !lhs_cst) {
+			printf("\ttest %%rax,%%rax\n");
+			if (osteq)
+				jelbl(sc_short);
+			else
+				jnelbl(sc_short);
+		}
+
+		if (lhs_cst) {
+			expr_ty = lhs_ty;
+			expr(rec_prec);
+
+			/*
+			 * both operands were compile-time values: fold in C
+			 * and emit nothing. a pointer lhs is skipped --
+			 * pointer values never leave the type system as
+			 * consts.
+			 */
+			if (lval.lval_isconst && lhs_ty->sty_kind != TYPTR &&
+			    foldop(op, lhsv, lval.lval_val, &lval.lval_val))
+				continue;
+
+			/* park the materialized rhs, reload the lhs */
+			materialize(&lval);
+			park();
+			unpark();
+			retval(lhsv);
+		} else {
+			park();
+			expr_ty = lhs_ty;
+			expr(rec_prec);
+
+			if (lval.lval_isconst) {
+				/* rhs is a compile-time value: an immediate */
+				unpark();
+				printf("	mov $%llu, %%rcx\n", lval.lval_val);
+				lval.lval_isconst = 0;
+			} else {
+				unpark();
+				printf("	xchg %%rax, %%rcx\n");
+				lval.lval_isglob = 0;
+			}
+		}
+
+		if (op->op_ptr == PTRARITH || op->op_ptr == NOPTR) pointarith(op, lhs_ty, lval.lval_ty, 0);
+
+		lval.lval_ty = lhs_ty;
+		runemit(op->op_emit, op->op_tpl, lval);
+
+		if (osc && !lhs_cst) {
+			jmplbl(sc_done);
+			idlbl(sc_short);
+			printf("\tmov $%d,%%rax\n", osteq ? 0 : 1);
+			idlbl(sc_done);
 		}
 	}
 
@@ -723,24 +889,27 @@ static int labhas(const struct lab labs[], int n, const char *name)
 	return 0;
 }
 
+/* append name to labs[] unless already present; 0 = existed */
+static int labadd(struct lab labs[], int *n, const char *name)
+{
+	if (*n == LABMAX) error("too many labels in function");
+	if (labhas(labs, *n, name)) return 0;
+	strncpy(labs[*n].lab_name, name, SYMMAX - 1);
+	labs[*n].lab_name[SYMMAX - 1] = '\0';
+	(*n)++;
+	return 1;
+}
+
 /* a 'name:' statement: record it, reject a second definition */
 void labadddef(const char *name)
 {
-	if (nlabdefs == LABMAX) error("too many labels in function");
-	if (labhas(labdefs, nlabdefs, name)) error("redefinition of label '%s'", name);
-	strncpy(labdefs[nlabdefs].lab_name, name, SYMMAX - 1);
-	labdefs[nlabdefs].lab_name[SYMMAX - 1] = '\0';
-	nlabdefs++;
+	if (!labadd(labdefs, &nlabdefs, name)) error("redefinition of label '%s'", name);
 }
 
 /* a 'goto name;': remember the target, the definition may come later */
 void labadduse(const char *name)
 {
-	if (labhas(labuses, nlabuses, name)) return;
-	if (nlabuses == LABMAX) error("too many labels in function");
-	strncpy(labuses[nlabuses].lab_name, name, SYMMAX - 1);
-	labuses[nlabuses].lab_name[SYMMAX - 1] = '\0';
-	nlabuses++;
+	labadd(labuses, &nlabuses, name);
 }
 
 /* every use must be answered by a definition somewhere in the body */
@@ -748,6 +917,123 @@ void labcheck(void)
 {
 	for (int i = 0; i < nlabuses; i++)
 		if (!labhas(labdefs, nlabdefs, labuses[i].lab_name)) error("undefined label '%s'", labuses[i].lab_name);
+}
+
+/*
+ * the parameters of the function being parsed: their frame slots were
+ * already allocated by symadd while the declarator ran, so each record
+ * only needs the slot offset and the type (which decides the store
+ * width). matches the SysV register/stack split of the call site.
+ */
+struct fpart {
+	int          fp_off;
+	struct symty *fp_ty;
+};
+
+static struct fpart fpars[FPARMAX];
+static int          nfpars;
+
+void fparamreset(void)
+{
+	nfpars = 0;
+}
+
+void fparamadd(int off, struct symty *ty)
+{
+	if (nfpars == FPARMAX) error("too many parameters in function");
+	fpars[nfpars].fp_off = off;
+	fpars[nfpars].fp_ty  = ty;
+	nfpars++;
+}
+
+/*
+ * the SysV argument registers by store width. the row is log2(size):
+ * a 1-byte param travels in the low byte of rdi/rsi/... a 4-byte one
+ * in their 32-bit half. fparamprologue reads the whole table, fccall
+ * only the 64-bit row it hands every argument through.
+ */
+static const char *const argreg[4][6] = {
+	{"dil", "sil", "dl", "cl", "r8b", "r9b"},
+	{"di", "si", "dx", "cx", "r8w", "r9w"},
+	{"edi", "esi", "edx", "ecx", "r8d", "r9d"},
+	{"rdi", "rsi", "rdx", "rcx", "r8", "r9"},
+};
+
+/* the sized accumulator a store reads the value from */
+static const char *const streg[9] = {NULL, "%al", "%ax", NULL, "%eax", NULL, NULL, NULL, "%rax"};
+
+/* the sized store opcode, emitted once per frame slot */
+static const char *const stmov[9] = {NULL, "movb", "movw", NULL, "movl", NULL, NULL, NULL, "movq"};
+
+/*
+ * emitted inside the deferred frame setup, after the frame has been
+ * reserved and before the body is reached: arguments 0-5 travel in
+ * rdi/rsi/rdx/rcx/r8/r9, anything beyond sits on the stack between the
+ * saved rbp and the return address. the target slot owns the store
+ * width, matching the sized loads the body will do.
+ */
+void fparamprologue(void)
+{
+	for (int i = 0; i < nfpars; i++) {
+		int sz = stysize(fpars[i].fp_ty);
+
+		if (i < 6) {
+			printf("	%s %%%s, %d(%%rbp)\n", stmov[sz], argreg[sizlog(sz)][i], fpars[i].fp_off);
+		} else {
+			printf("	mov %d(%%rbp), %%rax\n", 16 + 8 * (i - 6));
+			printf("	%s %s, %d(%%rbp)\n", stmov[sz], streg[sz], fpars[i].fp_off);
+		}
+	}
+}
+
+/*
+ * a function call. reservation of the final tank for stack arguments
+ * (8k bytes, plus whatever padding the 16-byte alignment rule needs)
+ * happened before the arguments were evaluated; fccall itself only
+ * redistributes what the evaluation piled up: the stack arguments are
+ * popped first and re-parked at their final slots (addressed relative
+ * to the current rsp, so no base register survives the evaluation),
+ * then the register arguments are popped straight into rdi..r9. after
+ * every pop rsp has climbed back onto the reserved base, so the 'call'
+ * sees the stack arguments stacked the SysV way and, with the frame
+ * being a 16-byte multiple, correct alignment.
+ */
+static void fccall(const char *name, int n, int total)
+{
+	int rn    = n > 6 ? 6 : n;
+	int indir = name[0] == '*';
+
+	for (int i = n - 1; i >= rn; i--) {
+		stkpend -= 8;
+		printf("	pop %%rax\n");
+		printf("	mov %%rax, %d(%%rsp)\n", 16 * i - 48);
+	}
+	for (int i = rn - 1; i >= 0; i--) {
+		stkpend -= 8;
+		printf("	pop %%rax\n");
+		printf("	mov %%rax, %%%s\n", argreg[3][i]);
+	}
+
+	/*
+	 * an indirect call saved its target on the tank, deeper than the
+	 * reserve: it sits at rsp+total. reading it into r10 keeps the
+	 * reserve (and the stack arguments it anchors) in place through
+	 * the 'call', exactly like the direct path. r10 is reloaded from
+	 * the caller's own slot, so calls nested in the arguments cannot
+	 * clobber it.
+	 */
+	if (indir) {
+		printf("	mov %d(%%rsp), %%r10\n", total);
+		printf("	call *%%r10\n");
+		printf("	add $%d, %%rsp\n", total + 8);
+		stkpend -= total + 8;
+		return;
+	}
+	printf("	call %s\n", name);
+	if (total) {
+		stkpend -= total;
+		printf("	add $%d, %%rsp\n", total);
+	}
 }
 
 /*
@@ -907,6 +1193,7 @@ static int knrdef(void)
 	int           nparms = 0;
 	int           framesave;
 
+	fparamreset();
 	readident(name, sizeof(name));
 	f = funclookup(name);
 	if (!f) {
@@ -957,8 +1244,10 @@ static int knrdef(void)
 		      name);
 
 	framesave = symsave();
-	for (int i = 0; i < nparms; i++)
-		symadd(parms[i], depth + 1, sig->fs_args[i], SCLOCAL);
+	for (int i = 0; i < nparms; i++) {
+		struct sym *sp = symadd(parms[i], depth + 1, sig->fs_args[i], SCLOCAL);
+		fparamadd(sp->sym_off, sig->fs_args[i]);
+	}
 
 	fndecl(name, f->func_ty, framesave);
 	symdrop(depth + 1);

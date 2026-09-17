@@ -46,6 +46,25 @@ void labadddef(const char *);
 void labadduse(const char *);
 void labcheck(void);
 
+/*
+ * the parameters of the function being declared, in signature order.
+ * recorded while the declarator parses (fnpar), consumed by the
+ * deferred prologue (endframe) as a SysV argument load, and discarded
+ * with the declaration.
+ */
+#define FPARMAX (64)
+void fparamreset(void);
+void fparamadd(int, struct symty *);
+void fparamprologue(void);
+
+/*
+ * how many stack bytes currently sit above the frame base as the parser
+ * walks an expression. every push/pop emission maintains it, so the
+ * call emitter can compute the padding needed to meet the 16-byte
+ * alignment rule at the 'call'.
+ */
+extern int stkpend;
+
 void decl(struct symty *);
 void factor(void);
 void stmt(int);

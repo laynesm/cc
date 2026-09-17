@@ -11,6 +11,9 @@ struct symty *inferty(unsigned long long);
 
 void tyinit(void);
 
+/* the floor of log2(n); n is a power of two, n >= 1        */
+int sizlog(int);
+
 /* width in bytes of a value of this type (pointers are 8)     */
 int stysize(struct symty *);
 int symalign(struct symty *);

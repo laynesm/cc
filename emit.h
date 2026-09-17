@@ -72,8 +72,13 @@ void materialize(struct lval *);
 void emit(const char *);
 void runemit(void (*)(struct lval), const char *, struct lval);
 
-void regispre(void);
-void regispost(void);
+/*
+ * the balanced push/pop around an rhs or an l-value: park() stashes the
+ * value in %rax on the stack and credits stkpend, unpark() fetches it
+ * back into %rcx and settles the counter again.
+ */
+void park(void);
+void unpark(void);
 
 void deptr(struct lval);
 void ptr(struct lval);

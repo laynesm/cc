@@ -48,75 +48,70 @@ static const char *memop(struct lval l, char *buf, size_t len)
 	return buf;
 }
 
-static void someq(struct lval l, const char *inst, const char *outreg)
+enum {
+	QADD, QSUB, QMUL, QDIV, QREM, QBAND, QBOR, QBXOR, QNUM
+};
+
+struct qop {
+	const char *inst;
+	int         iscqo;
+	const char *outreg;
+};
+
+/* the compound binary assignments differ only in the opcode */
+static const struct qop qops[QNUM] = {
+	[QADD]  = {"add", 0, "rax"},
+	[QSUB]  = {"sub", 0, "rax"},
+	[QMUL]  = {"imul", 0, "rax"},
+	[QDIV]  = {"idiv", 1, "rax"},
+	[QREM]  = {"idiv", 1, "rdx"},
+	[QBAND] = {"and", 0, "rax"},
+	[QBOR]  = {"or", 0, "rax"},
+	[QBXOR] = {"xor", 0, "rax"},
+};
+
+static void someq(struct lval l, int idx)
 {
-	printf("	push %%rax\n");
+	/* x = x op v: park the lhs, reload the lvalue, unpark and reuse */
+	park();
 	load(l);
-	printf("	pop %%rcx\n");
-	if (strcmp(inst, "idiv") == 0) {
+	unpark();
+
+	if (qops[idx].iscqo) {
+		/* idiv wants the dividend sign-extended into rdx */
 		printf("	cqo\n");
 		printf("	idiv %%rcx\n");
 	} else {
-		printf("	%s %%rcx,%%rax\n", inst);
+		printf("	%s %%rcx,%%rax\n", qops[idx].inst);
 	}
-	if (strcmp(outreg, "rax") != 0) printf("	mov %%%s,%%rax\n", outreg);
+
+	if (strcmp(qops[idx].outreg, "rax") != 0) printf("	mov %%%s,%%rax\n", qops[idx].outreg);
 	store(l);
 }
 
-void addeq(struct lval l)
-{
-	someq(l, "add", "rax");
-}
-
-void subeq(struct lval l)
-{
-	someq(l, "sub", "rax");
-}
-
-void muleq(struct lval l)
-{
-	someq(l, "imul", "rax");
-}
-
-void diveq(struct lval l)
-{
-	someq(l, "idiv", "rax");
-}
-
-void remeq(struct lval l)
-{
-	someq(l, "idiv", "rdx");
-}
-
-void bandeq(struct lval l)
-{
-	someq(l, "and", "rax");
-}
-
-void boreq(struct lval l)
-{
-	someq(l, "or", "rax");
-}
-
-void bxoreq(struct lval l)
-{
-	someq(l, "xor", "rax");
-}
+void addeq(struct lval l) { someq(l, QADD); }
+void subeq(struct lval l) { someq(l, QSUB); }
+void muleq(struct lval l) { someq(l, QMUL); }
+void diveq(struct lval l) { someq(l, QDIV); }
+void remeq(struct lval l) { someq(l, QREM); }
+void bandeq(struct lval l) { someq(l, QBAND); }
+void boreq(struct lval l) { someq(l, QBOR); }
+void bxoreq(struct lval l) { someq(l, QBXOR); }
 
 void bshleq(struct lval l)
 {
-	printf("	push %%rax\n");
+	park();
 	load(l);
-	printf("	pop %%rcx\n");
+	unpark();
 	printf("	shl %%cl, %%rax\n");
 	store(l);
 }
 
 void bshreq(struct lval l)
 {
-	printf("	push %%rax\n");
+	park();
 	load(l);
-	printf("	pop %%rcx\n");
+	unpark();
 	printf("	shr %%cl, %%rax\n");
 	store(l);
 }
@@ -157,13 +152,15 @@ void dec(struct lval l)
 	store(l);
 }
 
-void regispre(void)
+void park(void)
 {
+	stkpend += 8;
 	printf("	push %%rax\n");
 }
 
-void regispost(void)
+void unpark(void)
 {
+	stkpend -= 8;
 	printf("	pop %%rcx\n");
 }
 
@@ -173,6 +170,7 @@ void regispost(void)
  */
 void deptr(struct lval l)
 {
+	if (l.lval_ty->sty_kind == TYFUNC) return; /* a function designator *is* its address */
 	if (l.lval_ty->sty_size == 0) error("cannot dereference a void pointer");
 	load_mem("0(%rax)", l.lval_ty->sty_size, l.lval_ty->sty_signed);
 }
@@ -181,12 +179,7 @@ void ptr(struct lval l)
 {
 	char buf[SYMMAX + 8];
 
-	if (l.lval_isglob)
-		snprintf(buf, sizeof(buf), "%s(%%rip)", l.lval_glob);
-	else
-		snprintf(buf, sizeof(buf), "%d(%%rbp)", l.lval_off);
-
-	printf("	lea %s, %%rax\n", buf);
+	printf("	lea %s, %%rax\n", memop(l, buf, sizeof(buf)));
 }
 
 void jmplbl(int id)
@@ -236,7 +229,17 @@ void endframe(int setup, int body, int size)
 	printf(".L%d:\n", setup);
 	printf("	push %%rbp\n");
 	printf("	mov %%rsp, %%rbp\n");
+
+	/*
+	 * the frame is rounded up to a 16-byte multiple so that, from the
+	 * prologue on, rsp stays 16-aligned as long as the expression
+	 * machinery keeps its pushes balanced. a call site then only needs
+	 * to account for its own argument stack in the alignment padding.
+	 */
+	size = (size + 15) & ~15;
 	printf("	sub $%d, %%rsp\n", size);
+
+	fparamprologue();
 	printf("	jmp .L%d\n", body);
 }
 
@@ -358,17 +361,6 @@ void globcomm(const char *name, int size, int align)
 	printf("	.comm %s,%d,%d\n", name, size, align);
 }
 
-static int p2log(int n)
-{
-	int log = 0;
-
-	while (n > 1) {
-		n >>= 1;
-		log++;
-	}
-	return log;
-}
-
 /* sizes are powers of two: 1/2/4/8 map to .byte/.word/.long/.quad */
 static const char *const sztpl[9] = {
 	NULL, ".byte ", ".word ", NULL, ".long ", NULL, NULL, NULL, ".quad ",
@@ -377,7 +369,7 @@ static const char *const sztpl[9] = {
 void globdata(const char *name, int size, int align, unsigned long long val)
 {
 	sectdata();
-	printf("	.p2align %d\n", p2log(align));
+	printf("	.p2align %d\n", sizlog(align));
 	printf("	.globl %s\n", name);
 	lbl(name);
 

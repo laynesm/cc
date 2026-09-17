@@ -43,29 +43,52 @@ static void looppop(void)
 	looppos--;
 }
 
+/*
+ * a bare '=' as the truth value is almost always a typo for '==':
+ * nudge like gcc does, but skip it when extra parens already say
+ * 'i meant it' -- the root op of '(x = 1)' is the paren, not '='.
+ */
+static void truthwarn(void)
+{
+	if (expr_rootop == OPASSIGN)
+		warn("suggest parentheses around assignment used as truth "
+		     "value");
+}
+
+/* the statements that bracket a condition all eat the same two chars */
+static void paropen(const char *father)
+{
+	skipws();
+	if (*curs != '(') error("'(' expected after %s", father);
+	advcurs(1);
+}
+
+static void parcloses(const char *father)
+{
+	skipws();
+	if (*curs != ')') error("missing ')' for %s", father);
+	advcurs(1);
+}
+
+/* every statement keyword ends its line with a ';' */
+static void semi(const char *kw)
+{
+	skipws();
+	if (*curs != ';') error("expected ';' after %s", kw);
+	advcurs(1);
+}
+
 static int parse_cond(const char *father)
 {
 	int false_lbl = newlbl();
 
-	skipws();
-	if (*curs != '(') error("'(' expected after %s", father);
-	advcurs(1);
+	paropen(father);
 
 	expr_ty = defty;
 	expr(-1);
+	truthwarn();
 
-	/*
-	 * a bare '=' as the truth value is almost always a typo for '==':
-	 * nudge like gcc does, but skip it when extra parens already say
-	 * 'i meant it' -- the root op of '(x = 1)' is the paren, not '='.
-	 */
-	if (expr_rootop == OPASSIGN)
-		warn("suggest parentheses around assignment used as truth "
-		     "value");
-
-	skipws();
-	if (*curs != ')') error("missing ')' for %s", father);
-	advcurs(1);
+	parcloses(father);
 
 	materialize(&lval);
 	cmp(0);
@@ -88,9 +111,7 @@ void dogoto(const struct keyword *)
 	skipws();
 	readident(name, sizeof(name));
 
-	skipws();
-	if (*curs != ';') error("expected ';' after goto");
-	advcurs(1);
+	semi("goto");
 
 	labadduse(name);
 	printf("	jmp .L_lbl_%s\n", name);
@@ -219,9 +240,7 @@ void dofor(const struct keyword *)
 	char *post_start, *post_end, *body_end;
 	int   parens = 0;
 
-	skipws();
-	if (*curs != '(') error("'(' expected after for");
-	advcurs(1);
+	paropen("for");
 
 	skipws();
 	expr_ty = defty;
@@ -238,9 +257,7 @@ void dofor(const struct keyword *)
 	if (*curs != ';') {
 		expr_ty = defty;
 		expr(-1);
-		if (expr_rootop == OPASSIGN)
-			warn("suggest parentheses around assignment used as "
-			     "truth value");
+		truthwarn();
 		materialize(&lval);
 		cmp(0);
 		jelbl(end_lbl);
@@ -304,19 +321,13 @@ void dodowhile(const struct keyword *)
 	}
 
 	/* parse cond? */
-	skipws();
-	if (*curs != '(') error("'(' expected after do-while");
-	advcurs(1);
+	paropen("do-while");
 
 	idlbl(cont_lbl);
 	expr_ty = defty;
 	expr(-1);
-	if (expr_rootop == OPASSIGN)
-		warn("suggest parentheses around assignment used as truth "
-		     "value");
-	skipws();
-	if (*curs != ')') error("missing ')' for do-while");
-	advcurs(1);
+	truthwarn();
+	parcloses("do-while");
 	if (*curs != ';') error("missing ';'");
 
 	materialize(&lval);
@@ -336,21 +347,13 @@ void doelse(const struct keyword *)
 void dobreak(const struct keyword *)
 {
 	if (looppos == 0) error("break outside of a loop");
-
-	skipws();
-	if (*curs != ';') error("expected ';' after break");
-	advcurs(1);
-
+	semi("break");
 	jmplbl(brklbl[looppos - 1]);
 }
 
 void docontinue(const struct keyword *)
 {
 	if (looppos == 0) error("continue outside of a loop");
-
-	skipws();
-	if (*curs != ';') error("expected ';' after continue");
-	advcurs(1);
-
+	semi("continue");
 	jmplbl(cntlbl[looppos - 1]);
 }

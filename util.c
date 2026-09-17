@@ -1,4 +1,5 @@
 #include <ctype.h>
+#include <limits.h>
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -83,6 +84,17 @@ int ptrstep(struct symty *ty)
 	return ty->sty_kind == TYPTR ? ty->sty_base->sty_size : 1;
 }
 
+int sizlog(int n)
+{
+	int log = 0;
+
+	while (n > 1) {
+		n >>= 1;
+		log++;
+	}
+	return log;
+}
+
 /*
  * each declaration allocates a fresh slot, so type identity must be
  * structural: two int* built at different moments are the same type.
@@ -110,16 +122,28 @@ int tyeq(struct symty *a, struct symty *b)
 	}
 }
 
+/*
+ * an integer literal gets the narrowest type that still fits, signed
+ * first: 65 is a char, 70000 a short, and so on up to a 64-bit void.
+ */
+struct intlim {
+	unsigned long long lim;
+	int                size;
+	int                sign;
+};
+
+static const struct intlim intlims[] = {
+	{127, 1, 1}, {255, 1, 0}, {32767, 2, 1}, {65535, 2, 0},
+	{2147483647ULL, 4, 1}, {4294967295ULL, 4, 0},
+	{9223372036854775807ULL, 8, 1}, {ULLONG_MAX, 8, 0},
+};
+
 struct symty *inferty(unsigned long long val)
 {
-	return val <= 127                      ? sclty(1, 1)
-	       : val <= 255                    ? sclty(1, 0)
-	       : val <= 32767                  ? sclty(2, 1)
-	       : val <= 65535                  ? sclty(2, 0)
-	       : val <= 2147483647             ? sclty(4, 1)
-	       : val <= 4294967295ULL          ? sclty(4, 0)
-	       : val <= 9223372036854775807ULL ? sclty(8, 1)
-	                                       : sclty(8, 0);
+	for (int i = 0; i < (int)countof(intlims); i++)
+		if (val <= intlims[i].lim) return sclty(intlims[i].size, intlims[i].sign);
+
+	return sclty(8, 0); /* unreachable: the last limit is everything */
 }
 
 /*
