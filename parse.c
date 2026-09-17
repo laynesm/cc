@@ -37,6 +37,9 @@ int extdecl;
 /* the statement mode currently being parsed (STMT vs DECEXP) */
 static int curstmt;
 
+/* set while the body of a function is being parsed */
+static int infunct;
+
 /*
  * whether the statement being parsed has emitted a side effect
  * (an assignment or ++/--). read at the end of the expression
@@ -114,6 +117,9 @@ static int fndecl(const char *name, struct symty *ty, int framesave)
 		return 0;
 	}
 
+	if (infunct) error("function '%s' cannot be defined inside another function", name);
+	infunct = 1;
+
 	funcadd(name, ty, 1);
 	funcretty  = ty->sty_base;
 	funcretlbl = newlbl();
@@ -131,6 +137,7 @@ static int fndecl(const char *name, struct symty *ty, int framesave)
 	ret();
 	endframe(setup, body, framesize());
 
+	infunct = 0;
 	symrestore(framesave);
 	fparamreset();
 
