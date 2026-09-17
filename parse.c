@@ -270,6 +270,54 @@ static int litbase(char c)
 }
 
 /*
+ * one component of a character literal: a plain character or a
+ * backslash escape. hexadecimal and octal escapes run until their
+ * digit class ends, like C. returns the value (in the char range)
+ * and leaves the cursor past the component.
+ */
+static unsigned long long chac(char **pp)
+{
+	char *p = *pp;
+
+	if (*p != '\\') {
+		*pp = p + 1;
+		return (unsigned long long)(unsigned char)*p;
+	}
+	p++;
+
+	switch (*p) {
+	case '\\': *pp = p + 1; return '\\';
+	case '\'': *pp = p + 1; return '\'';
+	case '"':  *pp = p + 1; return '"';
+	case 'a':  *pp = p + 1; return '\a';
+	case 'b':  *pp = p + 1; return '\b';
+	case 'f':  *pp = p + 1; return '\f';
+	case 'n':  *pp = p + 1; return '\n';
+	case 'r':  *pp = p + 1; return '\r';
+	case 't':  *pp = p + 1; return '\t';
+	case 'v':  *pp = p + 1; return '\v';
+	case 'x': {
+		unsigned long long v = 0;
+		p++;
+		if (!isxdigit((unsigned char)*p)) error("\\x needs a hex digit");
+		for (; isxdigit((unsigned char)*p); p++)
+			v = v * 16 + (isdigit((unsigned char)*p) ? *p - '0' : tolower(*p) - 'a' + 10);
+		*pp = p;
+		return v & 0xff;
+	}
+	default:
+		if (*p < '0' || *p > '7') error("stray backslash in character literal");
+		{
+			unsigned long long v = 0;
+			for (int i = 0; i < 3 && *p >= '0' && *p <= '7'; p++, i++)
+				v = v * 8 + (*p - '0');
+			*pp = p;
+			return v & 0xff;
+		}
+	}
+}
+
+/*
  * a call argument list and its emission. 'via' is the call target:
  * a function name ("add") or an indirect marker ("*%rax") when the
  * address sits in %rax. for an indirect call the target is pushed
@@ -530,6 +578,28 @@ void factor(void)
 	}
 
 	errno = 0;
+	if (*curs == '\'') {
+		unsigned long long cval;
+
+		advcurs(1);
+		cval = chac(&curs);
+		skipws();
+		if (*curs != '\'') error("expected closing ' in character literal");
+		advcurs(1);
+
+		/*
+		 * a character literal produces the language's char: the
+		 * narrowest fit comes from the value, not from the widening
+		 * rules that numbers go through.
+		 */
+		lval.lval_kind    = NONE;
+		lval.lval_ty      = expr_ty->sty_kind == TYPTR ? defty : sclty(1, 0);
+		lval.lval_isconst = 1;
+		lval.lval_isglob  = 0;
+		lval.lval_val     = cval;
+		return;
+	}
+
 	if (*curs == '0') {
 		char c = tolower(curs[1]);
 
