@@ -1166,11 +1166,24 @@ static void inferdecl(char *name)
 {
 	struct symty *ty;
 	struct sym   *s;
+	struct sym   *self;
 	struct lval  lv;
 
 	skipws();
+
+	/*
+	 * the object is not born until its initializer ends: its own name
+	 * must stay invisible to it, or 'a := a' silently borrows the value
+	 * of an outer 'a' (a self-reference at creation time). the name is
+	 * hidden for the expression only, then put back.
+	 */
+	self = symlookup(name, -1);
+	if (self) self->sym_name[0] = '\0';
+
 	expr_ty = defty;
 	expr(-1);
+
+	if (self) strcpy(self->sym_name, name);
 
 	ty = lval.lval_ty;
 	if (!ty)
