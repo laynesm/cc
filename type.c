@@ -32,6 +32,7 @@ struct symty *parsety(int first)
 {
 	char buf[KWMAX];
 	int  bits, longs, prio, size, sign, t;
+	struct symty *ty;
 
 	bits  = first;
 	longs = (first == TYLONG);
@@ -77,10 +78,15 @@ struct symty *parsety(int first)
 			sign = tytbl[t].ty_signed;
 		}
 
+	/* a qualifier is not a size: "const;" has nothing to win with */
+	if (prio < 0) error("expected a type");
+
 	/* an explicit sign always beats the type default */
 	if (bits & TYSIGN) sign = tytbl[bits & TYSIGNED ? TYSIGNED : TYUNSIGNED].ty_signed;
 
-	return sclty(size, sign);
+	ty            = sclty(size, sign);
+	ty->sty_const = bits & TYCONST;
+	return ty;
 }
 
 /*

@@ -441,7 +441,10 @@ void factor(void)
 			 * only ++/-- (PTRARITH) write: unary '*' and '&' just
 			 * shape up a value, so they never count as an effect.
 			 */
-			if (un->un_ptr == PTRARITH) effect = 1;
+			if (un->un_ptr == PTRARITH) {
+				if (l.lval_ty->sty_const) error("increment of read-only variable");
+				effect = 1;
+			}
 
 			if (un->un_ptr == DEPTR) {
 				if (l.lval_ty->sty_kind != TYPTR) error("cannot dereference non-pointer");
@@ -839,6 +842,7 @@ void expr(int min_prec)
 		if (op->op_assoc == OPASSOCR) {
 			struct lval l = lval;
 			if (l.lval_kind == NONE) error("assignment without an l-value.");
+			if (l.lval_ty->sty_const) error("assignment of read-only variable");
 			derefvalue(&l);
 
 			/* an assignment always writes, whatever its outcome */

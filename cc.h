@@ -87,6 +87,10 @@ struct lval;
 #define TYINT      (16)
 #define TYLONG     (32)
 #define TYVOID     (64)
+#define TYCONST    (128) /* a qualifier, never a size or sign */
+
+/* qualifiers are keywords that do not win the size/sign */
+#define CONST     TYCONST
 
 /* keywords, always use non-bit perfect numbers */
 #define RETURN   0
@@ -189,6 +193,7 @@ struct symty {
 	int          sty_size;
 	int          sty_signed;
 	int          sty_align;
+	int          sty_const; /* read-only object */
 	struct symty *sty_base;
 	struct fnsig *sty_sig;
 };
