@@ -318,6 +318,40 @@ static unsigned long long chac(char **pp)
 }
 
 /*
+ * a string literal: its bytes go to a labelled .data column and the
+ * value is a pointer to it. the assembler label (.Ls%d) lives in its
+ * own namespace so it can never collide with the .L%d code labels.
+ */
+static int strlbl;
+
+static void strlit(void)
+{
+	char buf[2048];
+	char name[16];
+	int  n = 0;
+
+	advcurs(1); /* the '"' */
+	for (;;) {
+		if (*curs == '"') break;
+		if (*curs == '\0') error("unterminated string literal");
+		if (n == (int)sizeof(buf) - 1) error("string literal too long");
+		buf[n++] = (char)chac(&curs);
+	}
+	advcurs(1);
+	buf[n] = '\0';
+
+	sectdata();
+	snprintf(name, sizeof(name), ".Ls%d", strlbl++);
+	lbl(name);
+	for (int i = 0; i <= n; i++)
+		printf("	.byte %d\n", (unsigned char)buf[i]);
+	sectext();
+
+	printf("	lea %s(%%rip), %%rax\n", name);
+	freshlval(NONE, NONE, mkptr(sclty(1, 0)));
+}
+
+/*
  * a call argument list and its emission. 'via' is the call target:
  * a function name ("add") or an indirect marker ("*%rax") when the
  * address sits in %rax. for an indirect call the target is pushed
@@ -578,6 +612,11 @@ void factor(void)
 	}
 
 	errno = 0;
+	if (*curs == '"') {
+		strlit();
+		return;
+	}
+
 	if (*curs == '\'') {
 		unsigned long long cval;
 
